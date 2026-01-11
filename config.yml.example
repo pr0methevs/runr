@@ -1,0 +1,10 @@
+repos:
+  - name: {owner}/{repo}
+    branches:
+      - master
+      - dev
+  - name: {owner}/{repo}
+    branches:
+      - master
+      - dev
+      - feat/{feature}
