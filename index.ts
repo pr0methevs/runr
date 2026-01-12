@@ -32,10 +32,18 @@ try {
   );
 }
 s.stop();
+outro("Finished Checking Login");
+
+intro("Reading Config");
 
 // Read and parse the YAML config at runtime
 const configText = await readFile("./config.yml", "utf8");
 const config = parseYaml(configText) as RepoConfig;
+
+log.step(`Config : ${config}`);
+outro("Finished Reading Config");
+
+intro("Picking Repos");
 
 // --- Get All Repos
 const repos: string[] = config.repos.map((repo) => repo.name).sort();
@@ -47,6 +55,10 @@ const repo = await select({
   options: repos.map((repo) => ({ value: repo })).sort(),
 });
 
+outro("Finished Picking Repos");
+
+intro("Picking Branch");
+
 // -- Get branches for selected repo
 const branch = await select({
   message: "Pick a branch",
@@ -55,6 +67,10 @@ const branch = await select({
       .find((r) => r.name === repo)
       ?.branches.map((branch) => ({ value: branch })) || [],
 });
+
+outro("Finished Picking Branch");
+
+intro("Picking Workflow");
 
 interface Workflow {
   name: string;
@@ -87,10 +103,14 @@ const selectedWorkflow = activeWorkflows.find(
 const selectedWorkflowName = selectedWorkflow?.name ?? "";
 
 log.step(`Selected Workflow: [${selectedWorkflowName}]`);
+outro("Finished Picking Workflow");
+
+intro("Getting Workflow Inputs");
 
 // Get the worfklow inputs, their types, defaults and types
 const workflowViewCommandOutput =
   await execa`gh workflow view ${selectedWorkflowName} -R ${repo.toString()} --yaml`;
+
 
 // Parse the output of workflowFile and get .on.workflow.dispatch_inputs
 const workflow = parseYaml(
@@ -108,6 +128,10 @@ const inputsArray = Object.entries(inputs ?? {}).map(([name, input]) => ({
   options: isChoiceInput(input) ? input.options : undefined,
   required: input.required,
 }));
+
+outro("Finished Getting Workflow Inputs");
+
+intro("Getting Workflow Inputs From User");
 
 const createdGroup: Record<string, () => ReturnType<typeof text> | ReturnType<typeof select>> = {};
 
@@ -148,6 +172,9 @@ const inputGroup = await group(
   }
 );
 
+outro("Finished Getting Workflow Inputs From User");
+
+intro("Running Workflow");
 // Build arguments array for execa
 const workflowRunArgs: string[] = [
   "workflow", "run", selectedWorkflowName,
@@ -168,7 +195,8 @@ const shouldContinue = await confirm({
 });
 
 if (shouldContinue) {
-  await execa("gh", workflowRunArgs);
+  const { stdout } = await execa("gh", workflowRunArgs);
+  log.step(`Done ! Result : ${stdout}`);
 }
 
 const shouldOpen = await confirm({
@@ -181,5 +209,5 @@ if (shouldOpen) {
 
 outro(`Done ! \n View your workflow in the web ui : https://github.com/${repo.toString()}/actions`);
 
-log.success(`Done ! \n View your workflow in the web ui : https://github.com/${repo.toString()}/actions`);
+// log.step(`View your workflow in the web ui : https://github.com/${repo.toString()}/actions`);
 

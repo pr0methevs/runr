@@ -1,5 +1,5 @@
 {
-  "name": "github_workflow_runner",
+  "name": "runr",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
@@ -11,9 +11,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Artur Kaminski",
   "license": "ISC",
-  "description": "",
+  "description": "Runr streamlines the GitHub Actions workflow dispatch process by providing an interactive CLI interface. Users can select repositories, branches, and workflows from a configured list, then dynamically populate workflow inputs based on the workflow's schema. It validates authentication, displays the generated command for confirmation, and optionally opens the workflow in the browser after execution.",
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^25.0.3",

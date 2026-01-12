@@ -1,4 +1,4 @@
-# Dispatachr
+# Runr
 
 The following sections provides a "Getting Up to Speed" overview, designed to be completed in approximately 15 minutes.
 
@@ -13,7 +13,7 @@ The following sections provides a "Getting Up to Speed" overview, designed to be
 
 **Purpose:** A TypeScript CLI tool that provides an interactive wrapper for GitHub Actions workflow dispatch, simplifying the process of triggering workflows across multiple repositories.
 
-**What it does:** Dispatachr streamlines the GitHub Actions workflow dispatch process by providing an interactive CLI interface. Users can select repositories, branches, and workflows from a configured list, then dynamically populate workflow inputs based on the workflow's schema. It validates authentication, displays the generated command for confirmation, and optionally opens the workflow in the browser after execution.
+**What it does:** Runr streamlines the GitHub Actions workflow dispatch process by providing an interactive CLI interface. Users can select repositories, branches, and workflows from a configured list, then dynamically populate workflow inputs based on the workflow's schema. It validates authentication, displays the generated command for confirmation, and optionally opens the workflow in the browser after execution.
 
 **Problem Solved:** Manually dispatching GitHub Actions workflows requires navigating the GitHub UI or constructing complex CLI commands with multiple input flags. This tool eliminates the friction of remembering repository names, branch configurations, and workflow input schemas by providing a guided, interactive experience.
 
@@ -51,44 +51,56 @@ The following sections provides a "Getting Up to Speed" overview, designed to be
 
 ### Business Context
 
-Dispatachr serves developers and DevOps engineers who frequently trigger GitHub Actions workflows across multiple repositories. It reduces context-switching between the terminal and browser, decreases errors from manual command construction, and standardizes workflow execution across teams.
+Runr serves developers and DevOps engineers who frequently trigger GitHub Actions workflow dispatch. It reduces context-switching between the terminal and browser, decreases errors from manual command construction, and standardizes workflow execution across teams.
 
 ### Architectural Context
 
-This is a single-file TypeScript CLI application that orchestrates GitHub CLI (`gh`) commands through interactive prompts. It operates as a local tool with no backend services.
+This is a cross-runtime TypeScript CLI application that orchestrates GitHub CLI (`gh`) commands through interactive prompts. It operates as a local tool with no backend services.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                       Dispatachr CLI                         │
-├──────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐   │
-│  │ config.yml  │  │ @clack/     │  │ Workflow Types      │   │
-│  │ (repos +    │  │ prompts     │  │ (Type-safe schemas) │   │
-│  │ branches)   │  │ (CLI UI)    │  │                     │   │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘   │
-│         │                │                    │              │
-│         └────────────────┼────────────────────┘              │
-│                          ▼                                   │
-│              ┌───────────────────────┐                       │
-│              │      index.ts         │                       │
-│              │   (Main Orchestrator) │                       │
-│              └───────────┬───────────┘                       │
-│                          │                                   │
-│                          ▼                                   │
-│              ┌───────────────────────┐                       │
-│              │   execa (gh CLI)      │                       │
-│              │   - gh auth status    │                       │
-│              │   - gh workflow list  │                       │
-│              │   - gh workflow view  │                       │
-│              │   - gh workflow run   │                       │
-│              └───────────────────────┘                       │
-└──────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │   GitHub API          │
-              │   (via gh CLI)        │
-              └───────────────────────┘
+**Quick Usage Demo:**
+
+![Quick Usage Demo](./docs/quick_usage.gif)
+
+**Architecture Diagram:**
+
+```mermaid
+flowchart TB
+    subgraph CLI["Runr CLI Application"]
+        direction TB
+        
+        subgraph Inputs["Configuration & UI"]
+            CONFIG[config.yml<br/>Repos + Branches]
+            PROMPTS[@clack/prompts<br/>CLI UI Library]
+            TYPES[workflow_types.ts<br/>Type-safe Schemas]
+        end
+        
+        MAIN[index.ts<br/>Main Orchestrator]
+        
+        subgraph GH["GitHub CLI Interface"]
+            EXECA[execa Process Executor]
+            AUTH[gh auth status]
+            LIST[gh workflow list]
+            VIEW[gh workflow view]
+            RUN[gh workflow run]
+        end
+        
+        CONFIG --> MAIN
+        PROMPTS --> MAIN
+        TYPES --> MAIN
+        
+        MAIN --> EXECA
+        EXECA --> AUTH
+        EXECA --> LIST
+        EXECA --> VIEW
+        EXECA --> RUN
+    end
+    
+    GH --> API[GitHub API<br/>via gh CLI]
+    
+    style CLI fill:#e1f5ff
+    style Inputs fill:#fff4e6
+    style GH fill:#f3e5f5
+    style API fill:#e8f5e9
 ```
 
 #### Technology Stack
@@ -99,10 +111,10 @@ This is a single-file TypeScript CLI application that orchestrates GitHub CLI (`
 **Frameworks & Libraries:**
 - `@clack/prompts` ^0.11.0 - Beautiful CLI prompts (intro, outro, select, text, confirm, spinner)
 - `execa` ^9.6.1 - Process execution with template literal support
-- `bun` runtime (YAML parsing built-in)
+- `yaml` ^2.8.2 - Cross-runtime YAML parsing
 
 **Infrastructure:**
-- Runtime: Bun (primary) / Node.js with ts-node (alternative)
+- Runtime: Bun (primary) / Node.js (alternative) - fully cross-runtime compatible
 - Deployment: Local CLI tool (no cloud infrastructure)
 - Database: N/A (file-based YAML configuration)
 
@@ -125,7 +137,7 @@ This is a single-file TypeScript CLI application that orchestrates GitHub CLI (`
 ### Project Structure
 
 ```
-gha_wrapper_ts/
+runr/
 ├── index.ts              # Main CLI application entry point
 ├── workflow_types.ts     # TypeScript type definitions for GitHub workflow schemas
 ├── config.yml            # User configuration (repos + branches) - gitignored
@@ -148,12 +160,12 @@ gha_wrapper_ts/
 git clone [repository-url]
 
 # Step 2: Navigate to project directory
-cd gha_wrapper_ts
+cd runr
 
-# Step 3: Install dependencies (using Bun - recommended)
+# Step 3a: Install dependencies (using Bun - recommended)
 bun install
 
-# Step 3 (alternative): Install dependencies (using npm)
+# Step 3b (alternative): Install dependencies (using npm)
 npm install
 
 # Step 4: Configure your repositories
@@ -172,9 +184,9 @@ cp config.yml.example config.yml
 
 ```bash
 # Run with Bun (recommended - faster startup)
-bun run dev
+bun run dev:bun
 
-# Run with Node.js + ts-node
+# Run with Node.js + npx + tsx
 npm run dev:node
 
 # Build TypeScript to JavaScript
@@ -262,7 +274,7 @@ npm test  # Currently exits with "no test specified"
 4. Run the application locally to test (`bun run dev`)
 5. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/)
 6. Push to your branch (`git push origin feat/amazing-feature`)
-7. Open a Pull Request
+7. Open a Pull Request to `incoming` branch
 
 ### Code Review Guidelines
 
