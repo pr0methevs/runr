@@ -1,4 +1,5 @@
-import { YAML } from "bun";
+import { readFile } from "node:fs/promises";
+import { parse as parseYaml } from "yaml";
 import { execa } from "execa";
 import { intro, outro, log, select, spinner, group, text, cancel, confirm } from "@clack/prompts";
 import type {
@@ -33,9 +34,8 @@ try {
 s.stop();
 
 // Read and parse the YAML config at runtime
-const configFile = Bun.file("./config.yml");
-const configText = await configFile.text();
-const config = YAML.parse(configText) as RepoConfig;
+const configText = await readFile("./config.yml", "utf8");
+const config = parseYaml(configText) as RepoConfig;
 
 // --- Get All Repos
 const repos: string[] = config.repos.map((repo) => repo.name).sort();
@@ -93,12 +93,12 @@ const workflowViewCommandOutput =
   await execa`gh workflow view ${selectedWorkflowName} -R ${repo.toString()} --yaml`;
 
 // Parse the output of workflowFile and get .on.workflow.dispatch_inputs
-const workflow = YAML.parse(
+const workflow = parseYaml(
   workflowViewCommandOutput.stdout,
 ) as WorkflowDispatchParsed;
 
 // Extract the inputs for the workflow, their types, defaults, and whether they are required
-const inputs: Record<string, WorkflowDispatchInput> | undefined = workflow.true.workflow_dispatch.inputs;
+const inputs: Record<string, WorkflowDispatchInput> | undefined = workflow.on.workflow_dispatch.inputs;
 
 // Convert inputs object to array with name, type, default, and required
 const inputsArray = Object.entries(inputs ?? {}).map(([name, input]) => ({

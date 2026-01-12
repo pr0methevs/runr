@@ -171,7 +171,7 @@ interface GitHubWorkflowParsed {
  */
 interface WorkflowDispatchParsed {
   name: string;
-  true: {
+  on: {
     workflow_dispatch: WorkflowDispatchTrigger;
   };
   jobs?: Record<string, WorkflowJob>;
