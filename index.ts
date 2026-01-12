@@ -34,16 +34,16 @@ try {
 s.stop();
 outro("Finished Checking Login");
 
-intro("Reading Config");
+intro("Loading Config");
 
 // Read and parse the YAML config at runtime
 const configText = await readFile("./config.yml", "utf8");
 const config = parseYaml(configText) as RepoConfig;
 
-log.step(`Config : ${config}`);
-outro("Finished Reading Config");
+log.step(`Config : ${JSON.stringify(config, null, 4)}`);
+outro("Finished Loading Config");
 
-intro("Picking Repos");
+intro("Repo Selection");
 
 // --- Get All Repos
 const repos: string[] = config.repos.map((repo) => repo.name).sort();
@@ -55,9 +55,9 @@ const repo = await select({
   options: repos.map((repo) => ({ value: repo })).sort(),
 });
 
-outro("Finished Picking Repos");
+outro("Finished Repo Selection");
 
-intro("Picking Branch");
+intro("Branch Selection");
 
 // -- Get branches for selected repo
 const branch = await select({
@@ -68,9 +68,9 @@ const branch = await select({
       ?.branches.map((branch) => ({ value: branch })) || [],
 });
 
-outro("Finished Picking Branch");
+outro("Finished Branch Selection");
 
-intro("Picking Workflow");
+intro("Workflow Selection");
 
 interface Workflow {
   name: string;
@@ -103,9 +103,9 @@ const selectedWorkflow = activeWorkflows.find(
 const selectedWorkflowName = selectedWorkflow?.name ?? "";
 
 log.step(`Selected Workflow: [${selectedWorkflowName}]`);
-outro("Finished Picking Workflow");
+outro("Finished Workflow Selection");
 
-intro("Getting Workflow Inputs");
+intro("Workflow Input Retrieval");
 
 // Get the worfklow inputs, their types, defaults and types
 const workflowViewCommandOutput =
@@ -129,9 +129,9 @@ const inputsArray = Object.entries(inputs ?? {}).map(([name, input]) => ({
   required: input.required,
 }));
 
-outro("Finished Getting Workflow Inputs");
+outro("Finished Workflow Input Retrieval");
 
-intro("Getting Workflow Inputs From User");
+intro("User Input Collection");
 
 const createdGroup: Record<string, () => ReturnType<typeof text> | ReturnType<typeof select>> = {};
 
@@ -172,7 +172,7 @@ const inputGroup = await group(
   }
 );
 
-outro("Finished Getting Workflow Inputs From User");
+outro("Finished User Input Collection");
 
 intro("Running Workflow");
 // Build arguments array for execa
@@ -188,10 +188,18 @@ for (const [key, value] of Object.entries(inputGroup)) {
 }
 
 // Build display command for user confirmation
-const workflowRunCommand = `gh ${workflowRunArgs.map(arg => arg.includes(" ") ? `"${arg}"` : arg).join(" ")}`;
+// Build display for user confirmation
+const displayInfo = [
+  `Running Workflow : ${selectedWorkflowName}`,
+  `Repo             : ${String(repo)}`,
+  `Branch           : ${String(branch)}`,
+  ``,
+  `Inputs :`,
+  ...Object.entries(inputGroup).map(([k, v]) => `  ${k.padEnd(15)} : ${v}`)
+].join("\n");
 
 const shouldContinue = await confirm({
-  message: `${workflowRunCommand} \n Do you want to continue?`,
+  message: `${displayInfo}\n\nDo you want to continue?`,
 });
 
 if (shouldContinue) {
@@ -208,6 +216,3 @@ if (shouldOpen) {
 }
 
 outro(`Done ! \n View your workflow in the web ui : https://github.com/${repo.toString()}/actions`);
-
-// log.step(`View your workflow in the web ui : https://github.com/${repo.toString()}/actions`);
-
