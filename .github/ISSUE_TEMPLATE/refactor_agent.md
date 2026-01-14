@@ -1,5 +1,5 @@
 ---
-name: "Refactoring Task (Copilot)"
+name: "Refactoring Task (Coding Agent)"
 about: "Assign to @copilot for code improvement tasks"
 title: "[REFACTOR] <concise description of the issue>"
 labels: ["copilot", "refactor"]

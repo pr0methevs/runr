@@ -1,0 +1,82 @@
+name: "Task (Coding Agent)"
+description: "Assign a task to the coding agent for autonomous implementation."
+title: "[TASK] <concise description of the task>"
+labels: ["copilot", "task"]
+assignees: ["@copilot"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Instructions for the Coding Agent
+
+        Assign this issue to Copilot and address the following task.
+
+        Your goal is to implement the requested feature or improvement following the provided description and acceptance criteria.
+
+        - **Focus Area**: [Specify the file(s) or module(s) to focus on]
+        - **Implementation Strategy**: [Briefly outline the approach if known]
+        - **Priority**: Medium
+
+        Note: If you need more information, leave a comment asking for clarification.
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: "Task Description"
+      description: "What needs to be done and why?"
+      placeholder: |
+        - **What needs to be done?**
+        Provide a clear, concise description of the feature, bug fix, or improvement.
+
+        - **Why is this needed?**
+        Explain the business or technical rationale.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: "Acceptance Criteria"
+      description: "Define the specific, measurable outcomes."
+      placeholder: |
+        - [ ] Specific, measurable outcome 1
+        - [ ] Specific, measurable outcome 2
+        - [ ] Specific, measurable outcome 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-context
+    attributes:
+      label: "Technical Context"
+      description: "Relevant files, components, and implementation notes."
+      placeholder: |
+        **Relevant files/components:**
+        - `src/components/ComponentName.tsx`
+        - `src/utils/helper.ts`
+
+        **Implementation notes:**
+        - Use existing patterns from `src/components/SimilarComponent.tsx`
+        - Follow established naming conventions
+        - Ensure TypeScript strict mode compliance
+
+  - type: textarea
+    id: testing-requirements
+    attributes:
+      label: "Testing Requirements"
+      description: "Specific tests that must pass for the task to be considered complete."
+      placeholder: |
+        - [ ] Unit tests cover new functionality
+        - [ ] Integration tests pass
+        - [ ] Manual testing steps documented
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "References"
+      description: "Link to related issues, design mockups, or documentation."
+      placeholder: |
+        - Related issue: #123
+        - Design mockup: [link]
+        - API documentation: [link]

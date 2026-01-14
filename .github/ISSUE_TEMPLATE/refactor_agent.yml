@@ -1,0 +1,93 @@
+name: "Refactoring Task (Coding Agent)"
+description: "Assign a refactoring task that the GitHub Copilot coding agent can address."
+title: "[REFACTOR] <concise description of the issue>"
+labels: ["copilot", "refactor"]
+assignees: ["@copilot"] # Assigns the issue to the coding agent automatically
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Instructions for the Coding Agent
+
+        Assign this issue to Copilot and address the following refactoring task.
+
+        Your goal is to improve the code quality, maintainability, or performance while ensuring that existing functionality remains intact and all tests pass.
+
+        - **Focus Area**: [Specify the file(s) or module(s) to focus on]
+        - **Target Metric**: [e.g., Reduce cyclomatic complexity, improve readability]
+        - **Priority**: Medium
+
+        Note: If you need more information, leave a comment asking for clarification.
+
+  - type: textarea
+    id: refactoring-objective
+    attributes:
+      label: "Refactoring Objective"
+      description: "What exactly needs to be refactored? Specify the code area or pattern."
+      placeholder: "e.g., The complex logic in the auth module should be simplified and extracted into smaller functions."
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Why is refactoring needed?"
+      description: "Technical debt, performance issues, maintainability, or alignment with new standards."
+      placeholder: "e.g., The current implementation is difficult to test and has several duplicated logic blocks."
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Scope and Boundaries"
+      description: "Specify which files to modify and which to avoid."
+      placeholder: |
+        Files to modify:
+        - src/utils/logic.ts
+        
+        Files to NOT modify:
+        - src/api/routes.ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: goals
+    attributes:
+      label: "Refactoring Goals"
+      description: "What are the specific improvements you want to see?"
+      value: |
+        - [ ] Improve [specific metric]
+        - [ ] Reduce complexity in [area]
+        - [ ] Update deprecated patterns
+        - [ ] Improve test coverage to [target percentage]
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: "Success Criteria"
+      description: "How will we know the refactoring was successful?"
+      value: |
+        - [ ] All existing functionality preserved
+        - [ ] All tests pass without modification (or updated as necessary)
+        - [ ] Code complexity reduced
+        - [ ] Performance maintained or improved
+        - [ ] No breaking changes introduced
+
+  - type: textarea
+    id: implementation-guidance
+    attributes:
+      label: "Implementation Guidance"
+      description: "Preferred patterns, tools to use, or reference examples."
+      placeholder: "e.g., Use the Strategy pattern for the payment processing logic."
+
+  - type: textarea
+    id: verification-steps
+    attributes:
+      label: "Verification Steps"
+      description: "Steps the agent should take to verify the changes."
+      value: |
+        - [ ] Run full test suite
+        - [ ] Manual smoke testing
+        - [ ] Performance benchmarking (if applicable)
