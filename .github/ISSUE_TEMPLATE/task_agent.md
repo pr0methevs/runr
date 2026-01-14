@@ -1,5 +1,5 @@
 ---
-name: "Copilot Task"
+name: "Coding Agent Task"
 about: "Assign to @copilot for autonomous implementation"
 title: "[TASK] Brief description"
 labels: ["copilot", "task"]

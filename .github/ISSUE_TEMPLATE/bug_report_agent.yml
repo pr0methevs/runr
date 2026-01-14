@@ -1,4 +1,4 @@
-name: "Bug Report (for Agent)"
+name: "Bug Report (Coding Agent)"
 description: "File a bug report that the GitHub Copilot coding agent can address."
 title: "[BUG] <concise description of the issue>"
 labels: ["copilot", "bug"]
