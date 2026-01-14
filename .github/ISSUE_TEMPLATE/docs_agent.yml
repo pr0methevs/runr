@@ -1,0 +1,68 @@
+name: "Documentation Update (Coding Agent)"
+description: "Assign a documentation update task that the coding agent can address."
+title: "[DOCS] <concise description of the update>"
+labels: ["copilot", "docs"]
+assignees: ["@copilot"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Instructions for the Coding Agent
+
+        Assign this issue to Copilot and address the following documentation task.
+
+        Your goal is to update the documentation (primarily the README) while strictly adhering to its existing style, tone, and structure.
+
+        - **Focus Area**: [Specify the file(s) to focus on, e.g., README.md]
+        - **Reference Context**: [Optional: Specify a branch, PR, or changelog to extract information from]
+        - **Priority**: Medium
+
+        Note: If you need more information, leave a comment asking for clarification.
+
+  - type: textarea
+    id: update-objective
+    attributes:
+      label: "Update Objective"
+      description: "What documentation needs to be updated and why?"
+      placeholder: "e.g., Update the 'Installation' section to include the new CLI flag."
+    validations:
+      required: true
+
+  - type: textarea
+    id: focus-area
+    attributes:
+      label: "Focus Area"
+      description: "Which files should be updated?"
+      value: |
+        - README.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: reference-context
+    attributes:
+      label: "Reference Context (Optional)"
+      description: "Specify a branch, PR link, or changelog content that contains the information to be documented."
+      placeholder: "e.g., See branch 'feat/new-api' or PR #45 for technical details."
+
+  - type: textarea
+    id: specific-changes
+    attributes:
+      label: "Specific Changes Requested"
+      description: "List the specific points or sections that need attention."
+      placeholder: |
+        - Add documentation for [Feature X]
+        - Update the 'Usage' examples to reflect latest API changes
+        - Fix broken links in the 'Contributing' section
+
+  - type: textarea
+    id: structure-constraints
+    attributes:
+      label: "Structure & Style Constraints"
+      description: "Any specific rules about the documentation structure?"
+      value: |
+        - Maintain existing README structure
+        - Use consistent professional tone
+        - Ensure all Mermaid diagrams (if any) are updated correctly
+        - Create mermaid diagrams for complex flows
