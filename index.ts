@@ -202,10 +202,12 @@ const shouldContinue = await confirm({
   message: `${displayInfo}\n\nDo you want to continue?`,
 });
 
+s.start("Running Workflow");
 if (shouldContinue) {
   const { stdout } = await execa("gh", workflowRunArgs);
   log.step(`Done ! Result : ${stdout}`);
 }
+s.stop();
 
 const shouldOpen = await confirm({
   message: "Do you want to open the workflow in the web ui?",
