@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
 import { execa } from "execa";
