@@ -2,3 +2,5 @@ node_modules
 dist
 config.yml
 TODO.md
+coverage
+*.log
