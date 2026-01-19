@@ -7,12 +7,13 @@
     "runr": "./dist/index.js"
   },
   "scripts": {
-    "dev:bun": "bun run index.ts",
-    "dev:node": "npx tsx index.ts",
+    "dev:bun": "bun run src/index.ts",
+    "dev:node": "npx tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "npm run test:node",
     "test:node": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:bun": "bun test",
     "prepare": "npm run build"
   },
