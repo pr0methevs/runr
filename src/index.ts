@@ -1,7 +1,4 @@
-#!/usr/bin/env
-
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { execa } from "execa";
 import {
@@ -335,26 +332,4 @@ export async function main(): Promise<void> {
   outro(
     `Done ! \n View your workflow in the web ui : https://github.com/${String(selectedRepo)}/actions`,
   );
-}
-
-// Only run if this is the main module (not imported for testing)
-// In ESM, we check if import.meta.url matches the resolved file path
-import { resolve } from 'node:path';
-
-function isMainModule(): boolean {
-  if (!process.argv[1]) {
-    return false;
-  }
-  try {
-    return fileURLToPath(import.meta.url) === resolve(process.argv[1]);
-  } catch {
-    return false;
-  }
-}
-
-if (isMainModule()) {
-  main().catch((error) => {
-    log.error(String(error));
-    process.exit(1);
-  });
 }
