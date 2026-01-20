@@ -83,7 +83,7 @@ export function getBranchesFromRepo(
   return repo?.branches || [];
 }
 
-export async function getWorfklowsForRepo(repo: string): Promise<Workflow[]> {
+export async function getWorkflowsForRepo(repo: string): Promise<Workflow[]> {
   // TODO: Verify if it's possible to also use the branch
   // TODO: Handle no workflows available
   const result =
@@ -91,7 +91,7 @@ export async function getWorfklowsForRepo(repo: string): Promise<Workflow[]> {
   return JSON.parse(result.stdout);
 }
 
-export function filerForActiveWorkflows(workflows: Workflow[]): Workflow[] {
+export function filterForActiveWorkflows(workflows: Workflow[]): Workflow[] {
   return workflows.filter((w) => w.state === "active").sort();
 }
 
@@ -259,8 +259,8 @@ export async function main(): Promise<void> {
     })),
   });
 
-  const possibleWorkflows = await getWorfklowsForRepo(String(selectedRepo));
-  const activeWorkflows = filerForActiveWorkflows(possibleWorkflows);
+  const possibleWorkflows = await getWorkflowsForRepo(String(selectedRepo));
+  const activeWorkflows = filterForActiveWorkflows(possibleWorkflows);
 
   const selectedWorkflowById = await select({
     message: "",

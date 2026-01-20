@@ -11,10 +11,9 @@
     "dev:node": "npx tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "npm run test:node",
     "test:node": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:bun": "bun test",
+    "coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "prepare": "npm run build"
   },
   "files": [
