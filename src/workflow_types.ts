@@ -3,16 +3,39 @@
  * Represents the structure of a workflow_dispatch trigger with its inputs
  */
 
+
+// Define the expected structure of your config
+interface RepoConfig {
+  repos: Array<{
+    name: string;
+    branches: string[];
+  }>;
+}
+
+interface Workflow {
+  name: string;
+  path: string;
+  id: number;
+  state: string;
+}
 // ============================================================
 // Input Type Definitions
 // ============================================================
 
-type WorkflowDispatchInputType =
-  | "string"
-  | "number"
-  | "boolean"
-  | "choice"
-  | "environment";
+export interface WorkflowInput {
+  name: string;
+  type: string;
+  default: string;
+  options: string[] | undefined;
+  required: boolean;
+}
+
+// type WorkflowDispatchInputType =
+//   | "string"
+//   | "number"
+//   | "boolean"
+//   | "choice"
+//   | "environment";
 
 interface BaseInput {
   description: string;
@@ -146,30 +169,9 @@ interface GitHubWorkflow {
 // ============================================================
 
 /**
- * When parsing YAML workflows, the `on` key is often converted to boolean `true`
- * because 'on' is a reserved YAML boolean value. This type handles that case.
- *
- * Use this when your YAML parser outputs `{ "true": { workflow_dispatch: ... } }`
- * instead of `{ "on": { workflow_dispatch: ... } }`
- */
-interface GitHubWorkflowParsed {
-  name: string;
-  true: WorkflowTriggers;
-  env?: Record<string, string>;
-  defaults?: {
-    run?: {
-      shell?: string;
-      "working-directory"?: string;
-    };
-  };
-  concurrency?: string | { group: string; "cancel-in-progress"?: boolean };
-  jobs?: Record<string, WorkflowJob>;
-}
-
-/**
  * Simplified version for workflow_dispatch-only workflows with the parsing quirk
  */
-interface WorkflowDispatchParsed {
+interface WorkflowDispatch {
   name: string;
   on: {
     workflow_dispatch: WorkflowDispatchTrigger;
@@ -222,7 +224,8 @@ function isEnvironmentInput(
 // ============================================================
 
 export type {
-  WorkflowDispatchInputType,
+  RepoConfig,
+  Workflow,
   WorkflowDispatchInput,
   StringInput,
   NumberInput,
@@ -234,7 +237,7 @@ export type {
   WorkflowStep,
   WorkflowJob,
   GitHubWorkflow,
-  WorkflowDispatchParsed,
+  WorkflowDispatch,
   WorkflowWithDispatchInputs,
 };
 

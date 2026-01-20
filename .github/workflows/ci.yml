@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Run tests
+        run: npm run test
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -58,6 +61,9 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Run tests
+        run: bun run test
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
