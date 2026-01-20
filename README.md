@@ -2,7 +2,7 @@
 
 The following sections provides a "Getting Up to Speed" overview, designed to be completed in approximately 15 minutes.
 
->[!INFO]
+> [!IMPORTANT]
 > 
 > RTM - Read The Manual
 >
