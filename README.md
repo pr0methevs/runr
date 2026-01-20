@@ -194,7 +194,27 @@ npm run build
 
 # Run built version
 npm start
+
+# Install Globally (Local Simulation)
+npm link
+# Run runr anywhere (via terminal)
+runr
+
+# Uninstall Globally (Local Simulation)
+npm unlink
 ```
+
+### Production Build
+
+Uses tsup to build the project -- which creates a production-ready version of the application in the `dist` directory
+- Single file output
+- Minified
+- Tree-shaken
+- Type-safe
+- No node_modules/runtime dependencies required (minus gh cli)
+    - `tsup` (with standard settings or when you explicitly enable bundling, which is the default for input files) bundles the dependencies (like @clack/prompts, execa, yaml) directly into the output file.
+
+
 
 ---
 
@@ -205,8 +225,13 @@ npm start
 **Unit Tests:**
 
 ```bash
-# [No unit tests configured yet]
-npm test  # Currently exits with "no test specified"
+npm run test:node
+```
+
+**Test Coverage:**
+
+```bash
+npm run coverage
 ```
 
 **Integration Tests:**
@@ -215,11 +240,6 @@ npm test  # Currently exits with "no test specified"
 # [Integration tests not yet configured]
 ```
 
-**Test Coverage:**
-
-```bash
-# [Coverage reporting not yet configured]
-```
 
 > ⚠️ **Note:** Testing infrastructure is not yet implemented. See TODO.md for planned improvements.
 
