@@ -1,4 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import envPaths from "env-paths";
 import { parse as parseYaml } from "yaml";
 import { execa } from "execa";
 import {
@@ -42,16 +46,50 @@ export async function checkLogin(): Promise<boolean> {
   }
 }
 
+/**
+ * Resolves the configuration file path based on XDG standards and platform defaults.
+ * Priority:
+ * 1. XDG_CONFIG_HOME/runr/config.yml (if set)
+ * 2. ~/.config/runr/config.yml (Linux/Mac standard)
+ * 3. Platform specific default (APPDATA on Windows, ~/Library/Preferences on Mac)
+ * 4. ./config.yml (Legacy/Local fallback)
+ */
+export function getConfigPath(): string {
+  // 1. Check XDG_CONFIG_HOME
+  if (process.env.XDG_CONFIG_HOME) {
+    const xdgPath = path.join(process.env.XDG_CONFIG_HOME, "runr", "config.yml");
+    if (existsSync(xdgPath)) return xdgPath;
+  }
+
+  // 2. Check common ~/.config explicitly (preferred for CLI tools on Mac/Linux)
+  if (os.platform() !== "win32") {
+    const homeConfig = path.join(os.homedir(), ".config", "runr", "config.yml");
+    if (existsSync(homeConfig)) return homeConfig;
+  }
+
+  // 3. Platform specific defaults via env-paths
+  // Windows: %APPDATA%\runr\config.yml
+  // Mac: ~/Library/Preferences/runr/config.yml
+  // Linux: ~/.config/runr/config.yml (already covered above typically, but good fallback)
+  const paths = envPaths("runr");
+  const platformConfig = path.join(paths.config, "config.yml");
+  if (existsSync(platformConfig)) return platformConfig;
+
+  // 4. Fallback to local
+  return "./config.yml";
+}
+
 /** Read in the ./config.yml which contains repos and associated branche
  *
  * @param cfgPath
  * @returns
  */
 export async function loadConfig(
-  cfgPath: string = "./config.yml",
+  cfgPath?: string,
 ): Promise<RepoConfig> {
-  log.step("Config loaded");
-  const configTxt = await readFile(cfgPath, "utf8");
+  const resolvedPath = cfgPath || getConfigPath();
+  log.step(`Loading config from: ${resolvedPath}`);
+  const configTxt = await readFile(resolvedPath, "utf8");
   return parseYaml(configTxt) as RepoConfig;
 }
 
@@ -236,7 +274,13 @@ export async function main(): Promise<void> {
   const isLoggedIn = await checkLogin();
   // TODO: Handle not loged in -- if !isLoggedIn return error and exit
 
-  const cfg = await loadConfig();
+  let cfg: RepoConfig;
+  try {
+    cfg = await loadConfig();
+  } catch (error) {
+    log.error(`Failed to load configuration file. Make sure 'config.yml' exists at one of the standard locations (e.g. ~/.config/runr/config.yml) or in the current directory.`);
+    process.exit(1);
+  }
 
   outro("Initialization finished");
 
