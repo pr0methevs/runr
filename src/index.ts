@@ -118,7 +118,7 @@ export async function getWorkflowInputs(
     type: input.type,
     default: String(input.default ?? ""),
     options: isChoiceInput(input) ? input.options : undefined,
-    required: input.required,
+    required: input.required ?? false,
   }));
 }
 
