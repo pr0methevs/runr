@@ -326,6 +326,28 @@ describe("Phase 6: Retrieve Workflows Inputs", () => {
     expect(result[0]?.type).toBe('boolean');
     expect(result[0]?.default).toBe('false');
   });
+
+  it("should default inputs to required: false if not specified", async () => {
+    const workflowYaml = `
+      name: Optional Input
+      on:
+        workflow_dispatch:
+          inputs:
+            param:
+              description: 'Optional parameter'
+              type: string
+      `;
+
+    mockExecaFn.mockResolvedValueOnce({
+      stdout: workflowYaml,
+      stderr: '',
+      exitCode: 0,
+    });
+
+    const result = await getWorkflowInputs('Optional Input', 'owner/repo', 'main');
+
+    expect(result[0]?.required).toBe(false);
+  });
 });
 
 describe("Phase 7: User Inputs For Workflow Inputs", () => {

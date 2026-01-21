@@ -1,19 +1,19 @@
 {
   "name": "runr",
-  "version": "1.1.0",
+  "version": "2.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "runr": "./dist/index.js"
+    "runr": "./dist/cli.js"
   },
   "scripts": {
-    "dev:bun": "bun run src/index.ts",
-    "dev:node": "npx tsx src/index.ts",
-    "build": "tsup src/index.ts --format esm --clean --minify --dts",
+    "dev:bun": "bun run src/cli.ts",
+    "dev:node": "npx tsx src/cli.ts",
+    "build": "tsup src/index.ts src/cli.ts --format esm --clean --minify --dts",
     "build:dev": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/cli.js",
     "test:node": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:bun": "bun test",
+    "test:bun": "bun test --preload ./src/test-setup.ts",
     "coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "prepare": "npm run build"
   },
