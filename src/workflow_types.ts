@@ -3,12 +3,15 @@
  * Represents the structure of a workflow_dispatch trigger with its inputs
  */
 
+import type { Replay } from "./types.js";
+
 
 // Define the expected structure of your config
 interface RepoConfig {
   repos: Array<{
     name: string;
     branches: string[];
+    replays: Replay[];
   }>;
 }
 

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -24,6 +24,8 @@ import type {
   WorkflowDispatchInput,
   WorkflowDispatch,
 } from "./workflow_types.js";
+
+import type { Replay } from "./types.js";
 
 import { isChoiceInput } from "./workflow_types.js";
 
@@ -87,10 +89,19 @@ export function getConfigPath(): string {
 export async function loadConfig(
   cfgPath?: string,
 ): Promise<RepoConfig> {
+
   const resolvedPath = cfgPath || getConfigPath();
+
   log.step(`Loading config from: ${resolvedPath}`);
+
   const configTxt = await readFile(resolvedPath, "utf8");
   return parseYaml(configTxt) as RepoConfig;
+}
+
+export async function saveConfig(cfg: RepoConfig) {
+  const resolvedPath = getConfigPath();
+  log.step(`Saving config to: ${resolvedPath}`);
+  await writeFile(resolvedPath, JSON.stringify(cfg, null, 2));
 }
 
 /**
@@ -255,6 +266,56 @@ export function buildDisplayInfo(
     ...Object.entries(inputGroup).map(([k, v]) => `  ${k.padEnd(15)} : ${v}`),
   ].join("\n");
 }
+
+/**
+ *
+ * @param cfg
+ * @param selectedRepo
+ * @param selectedBranch
+ * @param selectedWorkflow
+ * @param inputGroup
+ */
+async function saveReplay(
+  cfg: RepoConfig,
+  selectedRepo: string,
+  selectedBranch: string,
+  selectedWorkflow: string,
+  inputGroup: Record<string, unknown>,
+) {
+  // -- FEAT : Adding a replay to the config
+  // 1. Ask if to save (y/n)
+  // 2. Ask for nickname (input)
+  // 3. Add to config
+  const shouldSave = await confirm({
+    message: "Do you want to save this workflow for future use?",
+  })
+
+  if (shouldSave) {
+    const nickname = await text({
+      message: "Enter a nickname for this workflow",
+    })
+    const replay: Replay = {
+      nickname: String(nickname),
+      repo: String(selectedRepo),
+      branch: String(selectedBranch),
+      workflow: String(selectedWorkflow),
+      inputs: inputGroup,
+    }
+
+    log.info(JSON.stringify(replay, null, 4));
+
+    // TODO: Add replay to config
+    const currRepo = cfg.repos.find(r => r.name === selectedRepo);
+
+    if (currRepo?.replays === null || currRepo?.replays === undefined) {
+      currRepo!.replays = [];
+    }
+
+    currRepo!.replays.push(replay);
+
+    await saveConfig(cfg);
+  }
+}
 // --- LOGIN STATE
 // try {
 //   const { stdout } = await execa`gh auth status`;
@@ -361,6 +422,9 @@ export async function main(): Promise<void> {
   if (shouldContinue) {
     const { stdout } = await execa("gh", workflowRunArgs);
   }
+
+  await saveReplay(cfg, String(selectedRepo), String(selectedBranch), String(selectedWorkflow), inputGroup);
+
 
   s.stop();
 
