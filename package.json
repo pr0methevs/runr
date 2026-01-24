@@ -1,6 +1,6 @@
 {
   "name": "runr",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
+    "env-paths": "^3.0.0",
     "execa": "^9.6.1",
     "yaml": "^2.8.2"
   }
