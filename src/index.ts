@@ -18,14 +18,13 @@ import {
 } from "@clack/prompts";
 
 import type {
-  RepoConfig,
   Workflow,
   WorkflowInput,
   WorkflowDispatchInput,
   WorkflowDispatch,
 } from "./workflow_types.js";
 
-import type { Replay } from "./types.js";
+import type { RepoConfig, Replay } from "./types.js";
 
 import { isChoiceInput } from "./workflow_types.js";
 
