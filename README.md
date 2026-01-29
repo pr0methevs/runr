@@ -99,11 +99,6 @@ flowchart TB
     end
     
     GH --> API[GitHub API<br/>via gh CLI]
-    
-    style CLI fill:#e1f5ff
-    style Inputs fill:#fff4e6
-    style GH fill:#f3e5f5
-    style API fill:#e8f5e9
 ```
 
 #### Technology Stack
