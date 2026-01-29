@@ -21,13 +21,15 @@ The following sections provides a "Getting Up to Speed" overview, designed to be
 **Key Benefits:**
 - **Interactive Selection**: Choose repos, branches, and workflows from pre-configured lists
 - **Dynamic Input Handling**: Automatically detects and prompts for all workflow input types (string, number, boolean, choice, environment)
+- **Workflow Replays**: Save complex workflow configurations as "replays" to re-run them instantly without re-entering inputs
 - **Command Confirmation**: Preview the generated `gh workflow run` command before execution
 - **Quick Browser Access**: Option to open the workflow run in GitHub's web UI immediately after dispatch
 
 **Functions:**
 
 - **Authentication Check**: Validates GitHub CLI login status before proceeding
-- **Repository Management**: Reads and parses YAML config for available repositories and branches
+- **Repository Management**: Reads YAML config from standard system paths (XDG, ~/.config, etc.)
+- **Replay System**: Persistence layer to save, list, and execute frequently used workflow runs
 - **Workflow Discovery**: Lists active workflows from selected repository via GitHub CLI
 - **Input Schema Parsing**: Extracts and types `workflow_dispatch` inputs from the selected branch's workflow YAML
 - **Interactive Prompts**: Provides text, select, and confirm prompts for user input
@@ -70,7 +72,7 @@ flowchart TB
         direction TB
         
         subgraph Inputs["Configuration & UI"]
-            CONFIG[config.yml<br/>Repos + Branches]
+            CONFIG[config.yml<br/>Repos + Branches + Replays]
             PROMPTS["@clack/prompts<br/>CLI UI Library"]
             TYPES[workflow_types.ts<br/>Type-safe Schemas]
         end
@@ -146,13 +148,9 @@ runr/
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript compiler configuration
 ├── bun.lock              # Bun package lock file
-└── node_modules/         # Installed dependencies
+├── node_modules/         # Installed dependencies
+└── dist/                 # Production build artifacts
 ```
-
-**Key Directories:**
-- `./index.ts`: Main application logic - authentication, prompts, workflow execution
-- `./workflow_types.ts`: Type-safe interfaces for GitHub Actions workflow_dispatch inputs
-- `./config.yml`: Your repository and branch configuration (copy from `.example`)
 
 ### Installation Steps
 
@@ -171,14 +169,25 @@ npm install
 
 # Step 4: Configure your repositories
 cp config.yml.example config.yml
+```
 
-# Step 5: Edit config.yml with your repositories and branches
-# Example:
-# repos:
-#   - name: owner/repo-name
-#     branches:
-#       - main
-#       - develop
+### Configuration
+
+Runr looks for `config.yml` in the following order:
+1. `XDG_CONFIG_HOME/runr/config.yml` (if set)
+2. `~/.config/runr/config.yml` (Standard on Linux/Mac)
+3. Platform specific defaults (e.g. `%APPDATA%` on Windows, `~/Library/Preferences` on Mac)
+4. `./config.yml` (Current directory fallback)
+
+**Example `config.yml`**:
+```yaml
+repos:
+  - name: owner/repo-name
+    branches:
+      - main
+      - develop
+# Replays are automatically added here when you save a workflow run
+replays: []
 ```
 
 ### Running Locally
@@ -207,15 +216,12 @@ npm unlink
 
 ### Production Build
 
-Uses tsup to build the project -- which creates a production-ready version of the application in the `dist` directory
+Uses `tsup` to build the project -- which creates a production-ready version of the application in the `dist` directory
 - Single file output
 - Minified
 - Tree-shaken
 - Type-safe
 - No node_modules/runtime dependencies required (minus gh cli)
-    - `tsup` (with standard settings or when you explicitly enable bundling, which is the default for input files) bundles the dependencies (like @clack/prompts, execa, yaml) directly into the output file.
-
-
 
 ---
 
@@ -227,6 +233,8 @@ Uses tsup to build the project -- which creates a production-ready version of th
 
 ```bash
 npm run test:node
+# OR
+bun test
 ```
 
 **Test Coverage:**
@@ -240,9 +248,6 @@ npm run coverage
 ```bash
 # [Integration tests not yet configured]
 ```
-
-
-> ⚠️ **Note:** Testing infrastructure is not yet implemented. See TODO.md for planned improvements.
 
 ---
 

@@ -1,0 +1,6 @@
+repos:
+  - name: owner/repo-name
+    branches:
+      - main
+      - develop
+replays: []
