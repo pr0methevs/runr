@@ -71,6 +71,8 @@ flowchart TB
     subgraph CLI["Runr CLI Application"]
         direction TB
         
+        CLI_ENTRY[cli.ts<br/>Entry Point]
+
         subgraph Inputs["Configuration & UI"]
             CONFIG[config.yml<br/>Repos + Branches + Replays]
             PROMPTS["@clack/prompts<br/>CLI UI Library"]
@@ -87,6 +89,7 @@ flowchart TB
             RUN[gh workflow run]
         end
         
+        CLI_ENTRY --> MAIN
         CONFIG --> MAIN
         PROMPTS --> MAIN
         TYPES --> MAIN
@@ -250,11 +253,21 @@ npm run coverage
 
 ### Pipelines
 
-**Ephemeral/Development:**
-- [CI/CD pipelines not yet configured]
+### Pipelines
+
+**Automated Workflows (GitHub Actions):**
+
+*   **CI (`ci.yml`):**
+    *   **Triggers:** Push to `main`, Pull Request to `main`.
+    *   **Node.js Build:** Runs on `ubuntu-latest` with Node 22. Installs dependencies, builds project, runs unit tests, generates coverage reports, and uploads artifacts (`dist` & `coverage-report`).
+    *   **Bun Build:** Runs on `ubuntu-latest` with latest Bun. Verifies build compatibility with the Bun runtime.
+*   **CodeQL Analysis (`codeql.yml`):**
+    *   **Triggers:** Push to `main`, Pull Request to `main`.
+    *   Performs advanced security analysis for JavaScript/TypeScript vulnerabilities.
 
 **PRODUCTION Deploy:**
-- N/A - This is a local CLI tool, not a deployed service
+*   N/A - This is a local CLI tool.
+*   Build artifacts are generated in the CI pipeline for every commit to `main`.
 
 ### Deployment Locations
 
@@ -264,22 +277,21 @@ npm run coverage
 - Foundations: Local Development Machine
 - Environment: Local / N/A
 - Type: CLI Tool
-- Dashboard: N/A
 
 **Log Levels:**
 - Local: Console output via `@clack/prompts` log methods
-- How to change: Modify `log.step()`, `log.success()`, `log.error()` calls in `index.ts`
 
 ### CI Environment Testing
 
-| Environment        | Purpose                | Jenkins/GHA/CI URL | Prerequisites               |
-| ------------------ | ---------------------- | ------------------ | --------------------------- |
-| Local              | Development & Usage    | N/A                | Bun/Node.js, gh CLI, config |
+| Environment | Purpose | Platform | Prerequisites/Trigger |
+| :--- | :--- | :--- | :--- |
+| **Local** | Development & Usage | Local Machine | Bun/Node.js, gh CLI, config |
+| **GitHub Actions** | CI Validation | `ubuntu-latest` | Push/PR to `main` |
 
-**E2E Testing:**
-- Location: [Not yet configured]
-- Command: `[E2E tests not implemented]`
-- Prerequisites: Would require mock GitHub API or test repositories
+**Test Coverage:**
+- Unit tests run automatically in CI.
+- Coverage reports are generated via `c8` / `v8` and uploaded as workflow artifacts.
+- Local command: `npm run coverage`
 
 ---
 
