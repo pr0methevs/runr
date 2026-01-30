@@ -103,11 +103,21 @@ export async function loadConfig(cfgPath?: string): Promise<RepoConfig> {
   return cfg;
 }
 
-export async function selectWorkflowOrReplay(decision: string, cfg: RepoConfig): Promise<{ selectedWorkflow: string; selectedRepo: string; selectedBranch: string; inputGroup: Record<string, unknown> }> {
+export async function selectWorkflowOrReplay(cfg: RepoConfig): Promise<{ selectedWorkflow: string; selectedRepo: string; selectedBranch: string; inputGroup: Record<string, unknown> }> {
   let selectedWorkflow: string;
   let selectedRepo: string;
   let selectedBranch: string;
   let inputGroup: Record<string, unknown>;
+
+  // Replay or Workflow
+  const decision = await select({
+    message:
+      "Do you want to assemble and dispatch a new Workflow command or use a saved Replay?",
+    options: [
+      { value: "workflow", label: "New Workflow" },
+      { value: "replay", label: "Replay" },
+    ],
+  });
 
   switch (decision) {
     case "replay":
@@ -501,17 +511,7 @@ export async function main(): Promise<void> {
 
   intro("Workflow setup started");
 
-  // Replay or Workflow
-  const decision = await select({
-    message:
-      "Do you want to assemble and dispatch a new Workflow command or use a saved Replay?",
-    options: [
-      { value: "workflow", label: "New Workflow" },
-      { value: "replay", label: "Replay" },
-    ],
-  });
-
-  let { selectedWorkflow, selectedRepo, selectedBranch, inputGroup } = await selectWorkflowOrReplay(decision as string, cfg!);
+  let { selectedWorkflow, selectedRepo, selectedBranch, inputGroup } = await selectWorkflowOrReplay(cfg!);
 
   const workflowRunArgs = buildWorkflowRunArgs(
     selectedWorkflow!,
