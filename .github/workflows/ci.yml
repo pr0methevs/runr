@@ -40,6 +40,13 @@ jobs:
 
       - name: Run coverage
         run: npm run coverage
+      
+      - name: Publish Test Summary Results
+        uses: ctrf-io/github-test-reporter@v1
+        with:
+          # Core Configuration
+          report-path: './ctrf/*.json' # Path or glob pattern to the CTRF report JSON file.
+        if: always()
         
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
