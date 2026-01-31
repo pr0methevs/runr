@@ -1,10 +1,6 @@
 repos:
-  - name: {owner}/{repo}
+  - name: owner/repo-name
     branches:
-      - master
-      - dev
-  - name: {owner}/{repo}
-    branches:
-      - master
-      - dev
-      - feat/{feature}
+      - main
+      - develop
+replays: []

@@ -21,13 +21,15 @@ The following sections provides a "Getting Up to Speed" overview, designed to be
 **Key Benefits:**
 - **Interactive Selection**: Choose repos, branches, and workflows from pre-configured lists
 - **Dynamic Input Handling**: Automatically detects and prompts for all workflow input types (string, number, boolean, choice, environment)
+- **Workflow Replays**: Save complex workflow configurations as "replays" to re-run them instantly without re-entering inputs
 - **Command Confirmation**: Preview the generated `gh workflow run` command before execution
 - **Quick Browser Access**: Option to open the workflow run in GitHub's web UI immediately after dispatch
 
 **Functions:**
 
 - **Authentication Check**: Validates GitHub CLI login status before proceeding
-- **Repository Management**: Reads and parses YAML config for available repositories and branches
+- **Repository Management**: Reads YAML config from standard system paths (XDG, ~/.config, etc.)
+- **Replay System**: Persistence layer to save, list, and execute frequently used workflow runs
 - **Workflow Discovery**: Lists active workflows from selected repository via GitHub CLI
 - **Input Schema Parsing**: Extracts and types `workflow_dispatch` inputs from the selected branch's workflow YAML
 - **Interactive Prompts**: Provides text, select, and confirm prompts for user input
@@ -69,8 +71,10 @@ flowchart TB
     subgraph CLI["Runr CLI Application"]
         direction TB
         
+        CLI_ENTRY[cli.ts<br/>Entry Point]
+
         subgraph Inputs["Configuration & UI"]
-            CONFIG[config.yml<br/>Repos + Branches]
+            CONFIG[config.yml<br/>Repos + Branches + Replays]
             PROMPTS["@clack/prompts<br/>CLI UI Library"]
             TYPES[workflow_types.ts<br/>Type-safe Schemas]
         end
@@ -85,6 +89,7 @@ flowchart TB
             RUN[gh workflow run]
         end
         
+        CLI_ENTRY --> MAIN
         CONFIG --> MAIN
         PROMPTS --> MAIN
         TYPES --> MAIN
@@ -97,11 +102,6 @@ flowchart TB
     end
     
     GH --> API[GitHub API<br/>via gh CLI]
-    
-    style CLI fill:#e1f5ff
-    style Inputs fill:#fff4e6
-    style GH fill:#f3e5f5
-    style API fill:#e8f5e9
 ```
 
 #### Technology Stack
@@ -146,13 +146,9 @@ runr/
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript compiler configuration
 ├── bun.lock              # Bun package lock file
-└── node_modules/         # Installed dependencies
+├── node_modules/         # Installed dependencies
+└── dist/                 # Production build artifacts
 ```
-
-**Key Directories:**
-- `./index.ts`: Main application logic - authentication, prompts, workflow execution
-- `./workflow_types.ts`: Type-safe interfaces for GitHub Actions workflow_dispatch inputs
-- `./config.yml`: Your repository and branch configuration (copy from `.example`)
 
 ### Installation Steps
 
@@ -171,14 +167,25 @@ npm install
 
 # Step 4: Configure your repositories
 cp config.yml.example config.yml
+```
 
-# Step 5: Edit config.yml with your repositories and branches
-# Example:
-# repos:
-#   - name: owner/repo-name
-#     branches:
-#       - main
-#       - develop
+### Configuration
+
+Runr looks for `config.yml` in the following order:
+1. `XDG_CONFIG_HOME/runr/config.yml` (if set)
+2. `~/.config/runr/config.yml` (Standard on Linux/Mac)
+3. Platform specific defaults (e.g. `%APPDATA%` on Windows, `~/Library/Preferences` on Mac)
+4. `./config.yml` (Current directory fallback)
+
+**Example `config.yml`**:
+```yaml
+repos:
+  - name: owner/repo-name
+    branches:
+      - main
+      - develop
+# Replays are automatically added here when you save a workflow run
+replays: []
 ```
 
 ### Running Locally
@@ -207,15 +214,12 @@ npm unlink
 
 ### Production Build
 
-Uses tsup to build the project -- which creates a production-ready version of the application in the `dist` directory
+Uses `tsup` to build the project -- which creates a production-ready version of the application in the `dist` directory
 - Single file output
 - Minified
 - Tree-shaken
 - Type-safe
 - No node_modules/runtime dependencies required (minus gh cli)
-    - `tsup` (with standard settings or when you explicitly enable bundling, which is the default for input files) bundles the dependencies (like @clack/prompts, execa, yaml) directly into the output file.
-
-
 
 ---
 
@@ -227,6 +231,8 @@ Uses tsup to build the project -- which creates a production-ready version of th
 
 ```bash
 npm run test:node
+# OR
+bun test
 ```
 
 **Test Coverage:**
@@ -241,20 +247,27 @@ npm run coverage
 # [Integration tests not yet configured]
 ```
 
-
-> ⚠️ **Note:** Testing infrastructure is not yet implemented. See TODO.md for planned improvements.
-
 ---
 
 ## 🔄 4. CI/CD & Deployment
 
 ### Pipelines
 
-**Ephemeral/Development:**
-- [CI/CD pipelines not yet configured]
+### Pipelines
+
+**Automated Workflows (GitHub Actions):**
+
+*   **CI (`ci.yml`):**
+    *   **Triggers:** Push to `main`, Pull Request to `main`.
+    *   **Node.js Build:** Runs on `ubuntu-latest` with Node 22. Installs dependencies, builds project, runs unit tests, generates coverage reports, and uploads artifacts (`dist` & `coverage-report`).
+    *   **Bun Build:** Runs on `ubuntu-latest` with latest Bun. Verifies build compatibility with the Bun runtime.
+*   **CodeQL Analysis (`codeql.yml`):**
+    *   **Triggers:** Push to `main`, Pull Request to `main`.
+    *   Performs advanced security analysis for JavaScript/TypeScript vulnerabilities.
 
 **PRODUCTION Deploy:**
-- N/A - This is a local CLI tool, not a deployed service
+*   N/A - This is a local CLI tool.
+*   Build artifacts are generated in the CI pipeline for every commit to `main`.
 
 ### Deployment Locations
 
@@ -264,22 +277,21 @@ npm run coverage
 - Foundations: Local Development Machine
 - Environment: Local / N/A
 - Type: CLI Tool
-- Dashboard: N/A
 
 **Log Levels:**
 - Local: Console output via `@clack/prompts` log methods
-- How to change: Modify `log.step()`, `log.success()`, `log.error()` calls in `index.ts`
 
 ### CI Environment Testing
 
-| Environment        | Purpose                | Jenkins/GHA/CI URL | Prerequisites               |
-| ------------------ | ---------------------- | ------------------ | --------------------------- |
-| Local              | Development & Usage    | N/A                | Bun/Node.js, gh CLI, config |
+| Environment | Purpose | Platform | Prerequisites/Trigger |
+| :--- | :--- | :--- | :--- |
+| **Local** | Development & Usage | Local Machine | Bun/Node.js, gh CLI, config |
+| **GitHub Actions** | CI Validation | `ubuntu-latest` | Push/PR to `main` |
 
-**E2E Testing:**
-- Location: [Not yet configured]
-- Command: `[E2E tests not implemented]`
-- Prerequisites: Would require mock GitHub API or test repositories
+**Test Coverage:**
+- Unit tests run automatically in CI.
+- Coverage reports are generated via `c8` / `v8` and uploaded as workflow artifacts.
+- Local command: `npm run coverage`
 
 ---
 

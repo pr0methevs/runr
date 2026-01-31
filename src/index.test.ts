@@ -1,9 +1,11 @@
 import { jest, beforeEach, describe, it, expect } from "@jest/globals";
-// import { getRepos, loadConfig } from "./index.js";
 
 // Create mock functions
 const mockExecaFn = jest.fn<any>();
 const mockReadFileFn = jest.fn<any>();
+const mockSelectFn = jest.fn<any>();
+const mockWriteFileFn = jest.fn<any>();
+const mockGroupFn = jest.fn<any>();
 
 // Mock modules with unstable_mockModule
 jest.unstable_mockModule("execa", () => ({
@@ -12,6 +14,7 @@ jest.unstable_mockModule("execa", () => ({
 
 jest.unstable_mockModule("node:fs/promises", () => ({
   readFile: mockReadFileFn,
+  writeFile: mockReadFileFn,
 }));
 
 jest.unstable_mockModule("@clack/prompts", () => ({
@@ -24,15 +27,16 @@ jest.unstable_mockModule("@clack/prompts", () => ({
     warn: jest.fn(),
     message: jest.fn(),
   },
-  select: jest.fn(),
+  select: mockSelectFn, // Allows us to mock user input (control return values)
   spinner: jest.fn(() => ({
     start: jest.fn(),
     stop: jest.fn(),
   })),
-  group: jest.fn(),
+  group: mockGroupFn, // Allows us to mock user input (control return values)
   text: jest.fn(),
   cancel: jest.fn(),
   confirm: jest.fn(),
+  isCancel: jest.fn(),
 }));
 
 const {
@@ -41,11 +45,13 @@ const {
   getRepos,
   getWorkflowsForRepo,
   getBranchesFromRepo,
+  selectWorkflowOrReplay,
   filterForActiveWorkflows,
   getWorkflowInputs,
   buildInputPrompts,
   buildWorkflowRunArgs,
-  buildDisplayInfo } = await import("./index.js");
+  buildDisplayInfo,
+} = await import("./index.js");
 
 describe("Phase 1: Login", () => {
   beforeEach(() => {
@@ -91,6 +97,7 @@ describe("Phase 2: Configuration Loading", () => {
           branches:
             - master
             - release
+      replays: []
       `;
 
     mockReadFileFn.mockResolvedValueOnce(cfg);
@@ -102,6 +109,7 @@ describe("Phase 2: Configuration Loading", () => {
         { name: "owner1/repo1", branches: ["main", "dev"] },
         { name: "owner2/repo2", branches: ["master", "release"] },
       ],
+      replays: [],
     });
 
     expect(mockReadFileFn).toHaveBeenCalledWith("./config.yml", "utf8");
@@ -109,69 +117,183 @@ describe("Phase 2: Configuration Loading", () => {
 
   it("should throw error when config.yml is not found", async () => {
     mockReadFileFn.mockRejectedValueOnce(new Error("ENOENT: File not found"));
-    await expect(loadConfig("./missing.yml")).rejects.toThrow("ENOENT: File not found");
+    await expect(loadConfig("./missing.yml")).rejects.toThrow(
+      "ENOENT: File not found",
+    );
   });
 
-  it('should handle custom config path', async () => {
+  it("should handle custom config path", async () => {
     const validConfig = `
     repos:
       - name: owner/repo1
         branches:
           - main
+    replays: []
     `;
     mockReadFileFn.mockResolvedValueOnce(validConfig);
 
-    await loadConfig('./custom/path/config.yml');
-    expect(mockReadFileFn).toHaveBeenCalledWith('./custom/path/config.yml', 'utf8');
+    await loadConfig("./custom/path/config.yml");
+    expect(mockReadFileFn).toHaveBeenCalledWith(
+      "./custom/path/config.yml",
+      "utf8",
+    );
   });
-
 });
 
-
-describe("Phase 3: Select a Repository", () => {
+describe("Phase 3a: Select to a replay", () => {
   const mockConfig = {
+    repos: [{ name: "owner/repo", branches: ["main"] }],
+    replays: [
+      {
+        nickname: "test-replay",
+        repo: "owner/repo",
+        branch: "main",
+        workflow: "Deploy",
+        inputs: { env: "prod" },
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should handle 'replay' selection and return stored replay data", async () => {
+    // 1. User selects "replay"
+    mockSelectFn.mockResolvedValueOnce("replay");
+
+    // 2. User selects the first replay
+    mockSelectFn.mockResolvedValueOnce(mockConfig.replays[0]);
+
+    const result = await selectWorkflowOrReplay(mockConfig);
+
+    expect(result).toEqual({
+      selectedWorkflow: "Deploy",
+      selectedRepo: "owner/repo",
+      selectedBranch: "main",
+      inputGroup: { env: "prod" },
+    });
+
+    expect(mockSelectFn).toHaveBeenCalledTimes(2); // Decision + Replay selection
+    expect(mockSelectFn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        message: "Pick a replay:",
+      })
+    );
+  });
+});
+
+describe("Phase 3b: Select to construct a new workflow", () => {
+  const mockConfig = {
+    repos: [{ name: "owner/repo", branches: ["main"] }],
+    replays: [],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should handle 'workflow' selection and guide user through setup", async () => {
+    // 1. Select "New Workflow"
+    mockSelectFn.mockResolvedValueOnce("workflow");
+    // 2. Select Repo
+    mockSelectFn.mockResolvedValueOnce("owner/repo");
+    // 3. Select Branch
+    mockSelectFn.mockResolvedValueOnce("main");
+
+    // 4. Execa: List Workflows
+    const workflows = [
+      { id: 123, name: "Deploy", path: ".github/workflows/deploy.yml", state: "active" },
+    ];
+    mockExecaFn.mockResolvedValueOnce({
+      stdout: JSON.stringify(workflows),
+    });
+
+    // 5. Select Workflow (by ID)
+    mockSelectFn.mockResolvedValueOnce(123);
+
+    // 6. Execa: View Workflow Inputs (YAML)
+    const workflowYaml = `
+      name: Deploy
+      on:
+        workflow_dispatch:
+          inputs:
+            env:
+              description: 'Environment'
+              required: true
+              default: 'dev'
+              type: string
+    `;
+    mockExecaFn.mockResolvedValueOnce({
+      stdout: workflowYaml,
+    });
+
+    // 7. Group: User enters inputs
+    mockGroupFn.mockResolvedValueOnce({ env: "prod" });
+
+    const result = await selectWorkflowOrReplay(mockConfig);
+
+    expect(result).toEqual({
+      selectedWorkflow: "Deploy",
+      selectedRepo: "owner/repo",
+      selectedBranch: "main",
+      inputGroup: { env: "prod" },
+    });
+
+    // Verify executions
+    expect(mockSelectFn).toHaveBeenCalledTimes(4); // Decision, Repo, Branch, Workflow
+    expect(mockExecaFn).toHaveBeenCalledTimes(2); // List workflows, View workflow
+    expect(mockGroupFn).toHaveBeenCalledTimes(1); // Inputs
+  });
+
+  // Unit tests for helper functions
+  const extensiveMockConfig = {
     repos: [
       { name: "owner1/repo1", branches: ["main", "dev"] },
       { name: "owner2/repo2", branches: ["master", "release"] },
       { name: "owner3/repo3", branches: ["main", "dev"] },
-    ]
-  }
+    ],
+    replays: [],
+  };
 
   it("should get a list of repositories that is sorted", () => {
-    const result = getRepos(mockConfig);
-    expect(result).toEqual(["owner1/repo1", "owner2/repo2", "owner3/repo3"].sort());
+    const result = getRepos(extensiveMockConfig);
+    expect(result).toEqual(
+      ["owner1/repo1", "owner2/repo2", "owner3/repo3"].sort(),
+    );
   });
 
   it("should return nothing when no repositorties present in config.yml", () => {
-    const emptyConfig = { repos: [] };
+    const emptyConfig = { repos: [], replays: [] };
     const result = getRepos(emptyConfig);
 
     expect(result).toEqual([]);
   });
-
 });
 
 describe("Phase 4: Select a Branch", () => {
   const mockConfig = {
     repos: [
-      { name: 'owner/repo1', branches: ['main', 'dev', 'staging'] },
-      { name: 'owner/repo2', branches: ['master'] },
+      { name: "owner/repo1", branches: ["main", "dev", "staging"] },
+      { name: "owner/repo2", branches: ["master"] },
     ],
+    replays: [],
   };
 
   it("should return branches for selected repository", () => {
-    const result = getBranchesFromRepo(mockConfig, 'owner/repo1');
-    expect(result).toEqual(['main', 'dev', 'staging']);
+    const result = getBranchesFromRepo(mockConfig, "owner/repo1");
+    expect(result).toEqual(["main", "dev", "staging"]);
   });
 
   it("should return empty array when repository is not found", () => {
-    const result = getBranchesFromRepo(mockConfig, 'owner/repo3');
+    const result = getBranchesFromRepo(mockConfig, "owner/repo3");
     expect(result).toEqual([]);
   });
 
   it("should return branches for 2nd repository", () => {
-    const result = getBranchesFromRepo(mockConfig, 'owner/repo2');
-    expect(result).toEqual(['master']);
+    const result = getBranchesFromRepo(mockConfig, "owner/repo2");
+    expect(result).toEqual(["master"]);
   });
 });
 
@@ -181,24 +303,39 @@ describe("Phase 5: Select a Workflow", () => {
   });
 
   const mockWorkflows = [
-    { name: 'CI', path: '.github/workflows/ci.yml', id: 1, state: 'active' },
-    { name: 'Deploy', path: '.github/workflows/deploy.yml', id: 2, state: 'active' },
-    { name: 'CodeQL', path: '.github/workflows/codeql.yml', id: 3, state: 'inactive' },
+    { name: "CI", path: ".github/workflows/ci.yml", id: 1, state: "active" },
+    {
+      name: "Deploy",
+      path: ".github/workflows/deploy.yml",
+      id: 2,
+      state: "active",
+    },
+    {
+      name: "CodeQL",
+      path: ".github/workflows/codeql.yml",
+      id: 3,
+      state: "inactive",
+    },
   ];
 
   it("should list workflows from the GitHub API (repository)", async () => {
     const mockWorkflows = [
-      { name: 'CI', path: '.github/workflows/ci.yml', id: 1, state: 'active' },
-      { name: 'Deploy', path: '.github/workflows/deploy.yml', id: 2, state: 'active' },
+      { name: "CI", path: ".github/workflows/ci.yml", id: 1, state: "active" },
+      {
+        name: "Deploy",
+        path: ".github/workflows/deploy.yml",
+        id: 2,
+        state: "active",
+      },
     ];
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: JSON.stringify(mockWorkflows),
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowsForRepo('owner/repo');
+    const result = await getWorkflowsForRepo("owner/repo");
 
     expect(result).toEqual(mockWorkflows);
     expect(mockExecaFn).toHaveBeenCalled();
@@ -206,22 +343,42 @@ describe("Phase 5: Select a Workflow", () => {
 
   it("should filter for only active workflows", () => {
     const workflows = [
-      { name: 'CI', path: '.github/workflows/ci.yml', id: 1, state: 'active' },
-      { name: 'Old', path: '.github/workflows/old.yml', id: 2, state: 'disabled' },
-      { name: 'Deploy', path: '.github/workflows/deploy.yml', id: 3, state: 'active' },
+      { name: "CI", path: ".github/workflows/ci.yml", id: 1, state: "active" },
+      {
+        name: "Old",
+        path: ".github/workflows/old.yml",
+        id: 2,
+        state: "disabled",
+      },
+      {
+        name: "Deploy",
+        path: ".github/workflows/deploy.yml",
+        id: 3,
+        state: "active",
+      },
     ];
 
     const result = filterForActiveWorkflows(workflows);
 
     expect(result).toEqual([
-      { name: 'CI', path: '.github/workflows/ci.yml', id: 1, state: 'active' },
-      { name: 'Deploy', path: '.github/workflows/deploy.yml', id: 3, state: 'active' },
+      { name: "CI", path: ".github/workflows/ci.yml", id: 1, state: "active" },
+      {
+        name: "Deploy",
+        path: ".github/workflows/deploy.yml",
+        id: 3,
+        state: "active",
+      },
     ]);
   });
 
   it("should return an empty array when no active workflows", async () => {
     const workflows = [
-      { name: 'CI', path: '.github/workflows/old.yml', id: 1, state: 'disabled' },
+      {
+        name: "CI",
+        path: ".github/workflows/old.yml",
+        id: 1,
+        state: "disabled",
+      },
     ];
 
     const result = filterForActiveWorkflows(workflows);
@@ -259,24 +416,24 @@ describe("Phase 6: Retrieve Workflows Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Deploy', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Deploy", "owner/repo", "main");
 
     expect(result).toEqual([
       {
-        name: 'environment',
-        type: 'choice',
-        default: 'dev',
-        options: ['dev', 'staging', 'prod'],
+        name: "environment",
+        type: "choice",
+        default: "dev",
+        options: ["dev", "staging", "prod"],
         required: true,
       },
       {
-        name: 'version',
-        type: 'string',
-        default: '1.0.0',
+        name: "version",
+        type: "string",
+        default: "1.0.0",
         options: undefined,
         required: false,
       },
@@ -293,11 +450,11 @@ describe("Phase 6: Retrieve Workflows Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Simple', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Simple", "owner/repo", "main");
 
     expect(result).toEqual([]);
   });
@@ -317,14 +474,14 @@ describe("Phase 6: Retrieve Workflows Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
-    expect(result[0]?.type).toBe('boolean');
-    expect(result[0]?.default).toBe('false');
+    expect(result[0]?.type).toBe("boolean");
+    expect(result[0]?.default).toBe("false");
   });
 
   it("should default inputs to required: false if not specified", async () => {
@@ -340,18 +497,21 @@ describe("Phase 6: Retrieve Workflows Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Optional Input', 'owner/repo', 'main');
+    const result = await getWorkflowInputs(
+      "Optional Input",
+      "owner/repo",
+      "main",
+    );
 
     expect(result[0]?.required).toBe(false);
   });
 });
 
 describe("Phase 7: User Inputs For Workflow Inputs", () => {
-
   it("should build input prompts for string inputs", async () => {
     const workflowYaml = `
       name: Test
@@ -367,14 +527,14 @@ describe("Phase 7: User Inputs For Workflow Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
-    expect(result[0]?.type).toBe('string');
-    expect(result[0]?.default).toBe('1.0.0');
+    expect(result[0]?.type).toBe("string");
+    expect(result[0]?.default).toBe("1.0.0");
   });
 
   it("should build input prompts for choice inputs", async () => {
@@ -396,15 +556,15 @@ describe("Phase 7: User Inputs For Workflow Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
-    expect(result[0]?.type).toBe('choice');
-    expect(result[0]?.default).toBe('dev');
-    expect(result[0]?.options).toEqual(['dev', 'staging', 'prod']);
+    expect(result[0]?.type).toBe("choice");
+    expect(result[0]?.default).toBe("dev");
+    expect(result[0]?.options).toEqual(["dev", "staging", "prod"]);
   });
 
   it("should build input prompts for boolean inputs", async () => {
@@ -422,14 +582,14 @@ describe("Phase 7: User Inputs For Workflow Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
-    expect(result[0]?.type).toBe('boolean');
-    expect(result[0]?.default).toBe('false');
+    expect(result[0]?.type).toBe("boolean");
+    expect(result[0]?.default).toBe("false");
   });
 
   it("should build input prompts for environment inputs", async () => {
@@ -447,14 +607,14 @@ describe("Phase 7: User Inputs For Workflow Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
-    expect(result[0]?.type).toBe('environment');
-    expect(result[0]?.default).toBe('dev');
+    expect(result[0]?.type).toBe("environment");
+    expect(result[0]?.default).toBe("dev");
   });
 
   it("should handle empty inputs array", async () => {
@@ -467,83 +627,92 @@ describe("Phase 7: User Inputs For Workflow Inputs", () => {
 
     mockExecaFn.mockResolvedValueOnce({
       stdout: workflowYaml,
-      stderr: '',
+      stderr: "",
       exitCode: 0,
     });
 
-    const result = await getWorkflowInputs('Test', 'owner/repo', 'main');
+    const result = await getWorkflowInputs("Test", "owner/repo", "main");
 
     expect(result).toEqual([]);
   });
 });
 
 describe("Phase 8: Run Workflow", () => {
-
   it("should build workflow run arguments correctly", () => {
     const inputGroup = {
-      environment: 'staging',
-      version: '2.0.0',
-      debug: 'true',
+      environment: "staging",
+      version: "2.0.0",
+      debug: "true",
     };
 
-    const result = buildWorkflowRunArgs('Deploy', 'owner/repo', 'main', inputGroup);
+    const result = buildWorkflowRunArgs(
+      "Deploy",
+      "owner/repo",
+      "main",
+      inputGroup,
+    );
 
     expect(result).toEqual([
-      'workflow',
-      'run',
-      'Deploy',
-      '-R',
-      'owner/repo',
-      '--ref',
-      'main',
-      '-f',
-      'environment=staging',
-      '-f',
-      'version=2.0.0',
-      '-f',
-      'debug=true',
+      "workflow",
+      "run",
+      "Deploy",
+      "-R",
+      "owner/repo",
+      "--ref",
+      "main",
+      "-f",
+      "environment=staging",
+      "-f",
+      "version=2.0.0",
+      "-f",
+      "debug=true",
     ]);
   });
 
   it("should build workflow run arguments with no inputs", () => {
     const inputGroup = {};
 
-    const result = buildWorkflowRunArgs('Simple', 'owner/repo', 'dev', inputGroup);
+    const result = buildWorkflowRunArgs(
+      "Simple",
+      "owner/repo",
+      "dev",
+      inputGroup,
+    );
 
     expect(result).toEqual([
-      'workflow',
-      'run',
-      'Simple',
-      '-R',
-      'owner/repo',
-      '--ref',
-      'dev',
+      "workflow",
+      "run",
+      "Simple",
+      "-R",
+      "owner/repo",
+      "--ref",
+      "dev",
     ]);
   });
 
   it("should build pretty print workflow inputs", () => {
     const inputGroup = {
-      environment: 'prod',
-      version: '3.0.0',
+      environment: "prod",
+      version: "3.0.0",
     };
 
-    const result = buildDisplayInfo('Deploy', 'owner/repo', 'main', inputGroup);
+    const result = buildDisplayInfo("Deploy", "owner/repo", "main", inputGroup);
 
-    expect(result).toContain('Running Workflow : Deploy');
-    expect(result).toContain('Repo             : owner/repo');
-    expect(result).toContain('Branch           : main');
-    expect(result).toContain('environment     : prod');
-    expect(result).toContain('version         : 3.0.0');
+    expect(result).toContain("Running Workflow : Deploy");
+    expect(result).toContain("Repo             : owner/repo");
+    expect(result).toContain("Branch           : main");
+    expect(result).toContain("environment     : prod");
+    expect(result).toContain("version         : 3.0.0");
   });
 
   it("should build pretty print workflow with no inputs", () => {
     const inputGroup = {};
 
-    const result = buildDisplayInfo('Simple', 'owner/test', 'dev', inputGroup);
+    const result = buildDisplayInfo("Simple", "owner/test", "dev", inputGroup);
 
-    expect(result).toContain('Running Workflow : Simple');
-    expect(result).toContain('Repo             : owner/test');
-    expect(result).toContain('Branch           : dev');
-    expect(result).toContain('Inputs :');
+    expect(result).toContain("Running Workflow : Simple");
+    expect(result).toContain("Repo             : owner/test");
+    expect(result).toContain("Branch           : dev");
+    expect(result).toContain("Inputs :");
   });
 });

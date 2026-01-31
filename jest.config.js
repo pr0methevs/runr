@@ -23,6 +23,8 @@ export default {
     coverageDirectory: "coverage",
     coverageReporters: ["text", "lcov", "html"],
     // If you store tests in a specific folder, you can specify it here:
+    roots: ["<rootDir>/src"],
+    testPathIgnorePatterns: ["/node_modules/", "/dist/"],
     // testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
     verbose: true,
 };

@@ -1,0 +1,11 @@
+repos:
+  - name: owner1/repo1
+    branches:
+      - master
+      - dev
+  - name: owner2/repos2
+    branches:
+      - main
+      - feat/someFeat
+
+replays: []

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -15,18 +15,19 @@ import {
   text,
   cancel,
   confirm,
+  isCancel,
 } from "@clack/prompts";
 
 import type {
-  RepoConfig,
   Workflow,
   WorkflowInput,
   WorkflowDispatchInput,
   WorkflowDispatch,
 } from "./workflow_types.js";
 
-import { isChoiceInput } from "./workflow_types.js";
+import type { RepoConfig, Replay } from "./types.js";
 
+import { isChoiceInput } from "./workflow_types.js";
 
 /** Verify user is logged in to GH via GH CLI
  *
@@ -57,7 +58,11 @@ export async function checkLogin(): Promise<boolean> {
 export function getConfigPath(): string {
   // 1. Check XDG_CONFIG_HOME
   if (process.env.XDG_CONFIG_HOME) {
-    const xdgPath = path.join(process.env.XDG_CONFIG_HOME, "runr", "config.yml");
+    const xdgPath = path.join(
+      process.env.XDG_CONFIG_HOME,
+      "runr",
+      "config.yml",
+    );
     if (existsSync(xdgPath)) return xdgPath;
   }
 
@@ -84,16 +89,139 @@ export function getConfigPath(): string {
  * @param cfgPath
  * @returns
  */
-export async function loadConfig(
-  cfgPath?: string,
-): Promise<RepoConfig> {
+export async function loadConfig(cfgPath?: string): Promise<RepoConfig> {
   const resolvedPath = cfgPath || getConfigPath();
+
   log.step(`Loading config from: ${resolvedPath}`);
+
   const configTxt = await readFile(resolvedPath, "utf8");
-  return parseYaml(configTxt) as RepoConfig;
+  let cfg = parseYaml(configTxt) as RepoConfig;
+
+  cfg.repos = cfg.repos || [];
+  cfg.replays = cfg.replays || [];
+
+  return cfg;
 }
 
-/**
+export async function selectWorkflowOrReplay(cfg: RepoConfig): Promise<{ selectedWorkflow: string; selectedRepo: string; selectedBranch: string; inputGroup: Record<string, unknown> }> {
+  let selectedWorkflow: string;
+  let selectedRepo: string;
+  let selectedBranch: string;
+  let inputGroup: Record<string, unknown>;
+
+  // Replay or Workflow
+  const decision = await select({
+    message:
+      "Do you want to assemble and dispatch a new Workflow command or use a saved Replay?",
+    options: [
+      { value: "workflow", label: "New Workflow" },
+      { value: "replay", label: "Replay" },
+    ],
+  });
+
+  switch (decision) {
+    case "replay":
+      // Get replays
+      const storedReplays = cfg.replays;
+
+      if (storedReplays.length === 0) {
+        log.error("No replays found in config");
+        process.exit(0);
+      }
+
+      const replay = await select({
+        message: "Pick a replay:",
+        options: storedReplays
+          .map((r) => ({ value: r, label: r.nickname }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      });
+
+      if (isCancel(replay)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      selectedRepo = (replay as Replay).repo;
+      selectedBranch = (replay as Replay).branch;
+      selectedWorkflow = (replay as Replay).workflow;
+      inputGroup = (replay as Replay).inputs;
+      break;
+
+    // If not a replay, always start a new workflow
+    default:
+      const repos = getRepos(cfg);
+      log.step(`Repos: ${repos}`);
+
+      selectedRepo = await select({
+        message: "Pick a repository:",
+        options: repos.map((r) => ({ value: r })).sort(),
+      }) as string;
+
+      selectedBranch = await select({
+        message: "Pick a branch:",
+        options: getBranchesFromRepo(cfg, String(selectedRepo)).map((b) => ({
+          value: b,
+        })),
+      }) as string;
+
+      const possibleWorkflows = await getWorkflowsForRepo(String(selectedRepo));
+      const activeWorkflows = filterForActiveWorkflows(possibleWorkflows);
+
+      const selectedWorkflowById = await select({
+        message: "",
+        options: activeWorkflows.map((w) => ({
+          value: w.id,
+          label: w.name,
+          hint: w.path,
+        })),
+      })
+
+      const selectedWorkflowByName = activeWorkflows.find(
+        (w) => w.id === selectedWorkflowById
+      );
+      selectedWorkflow = selectedWorkflowByName?.name ?? "";
+      outro("Workflow setup finished");
+
+      intro("Worfklow inputs started");
+      // Construct Workflow Inputs
+      const inputsArray: WorkflowInput[] = await getWorkflowInputs(
+        selectedWorkflow,
+        String(selectedRepo),
+        String(selectedBranch)
+      );
+
+      log.message(`Workflow inputs: ${JSON.stringify(inputsArray, null, 4)}`);
+
+      // Create prompt for inputs
+      const createdGroup = buildInputPrompts(inputsArray);
+
+      inputGroup = await group(createdGroup, {
+        onCancel: ({ results }) => {
+          cancel("Operation cancelled.");
+          process.exit(0);
+        },
+      });
+      break;
+  }
+  return { selectedWorkflow, selectedRepo, selectedBranch, inputGroup };
+}
+
+/** Save the config to disk
+ *
+ * @param cfg
+ */
+export async function writeConfig(cfg: RepoConfig) {
+  try {
+    const resolvedPath = getConfigPath();
+    log.step(`Saving config to: ${resolvedPath}`);
+    await writeFile(resolvedPath, JSON.stringify(cfg, null, 2));
+  } catch (e) {
+    log.error("Failed to save config");
+    throw e;
+  }
+}
+
+/** Retrieve all defined repos from config
  *
  * @param cfg
  * @returns
@@ -103,7 +231,7 @@ export function getRepos(cfg: RepoConfig): string[] {
   return cfg.repos.map((r) => r.name).sort();
 }
 
-/**
+/** Retrieve all defined branches from config for a specific repo
  *
  * @param cfg
  * @param repoName
@@ -118,6 +246,11 @@ export function getBranchesFromRepo(
   return repo?.branches || [];
 }
 
+/** Retrieve all workflows for a specific repo
+ *
+ * @param repo
+ * @returns
+ */
 export async function getWorkflowsForRepo(repo: string): Promise<Workflow[]> {
   // TODO: Verify if it's possible to also use the branch
   // TODO: Handle no workflows available
@@ -126,10 +259,22 @@ export async function getWorkflowsForRepo(repo: string): Promise<Workflow[]> {
   return JSON.parse(result.stdout);
 }
 
+/** Filter workflows for active workflows
+ *
+ * @param workflows
+ * @returns
+ */
 export function filterForActiveWorkflows(workflows: Workflow[]): Workflow[] {
   return workflows.filter((w) => w.state === "active").sort();
 }
 
+/** Retrieve workflow inputs for a specific workflow
+ *
+ * @param workflowName
+ * @param repo
+ * @param branch
+ * @returns
+ */
 export async function getWorkflowInputs(
   workflowName: string,
   repo: string,
@@ -160,6 +305,11 @@ export async function getWorkflowInputs(
   }));
 }
 
+/** Build input prompts for a specific workflow
+ *
+ * @param inputs
+ * @returns
+ */
 export function buildInputPrompts(
   inputs: WorkflowInput[],
 ): Record<string, () => ReturnType<typeof text> | ReturnType<typeof select>> {
@@ -203,13 +353,22 @@ export function buildInputPrompts(
           });
         break;
       default:
-        log.error("Invalid Input Type !");
+        log.error("Invalid input type");
     }
   });
 
   return createdGroup;
 }
 
+/**
+ * Build a workflow run command
+ *
+ * @param workflowName
+ * @param repo
+ * @param branch
+ * @param inputGroup
+ * @returns
+ */
 export function buildWorkflowRunArgs(
   workflowName: string,
   repo: string,
@@ -233,6 +392,7 @@ export function buildWorkflowRunArgs(
   return workflowRunArgs;
 }
 /**
+ * Build a display info string for the workflow run
  *
  * @param workflowName
  * @param repo
@@ -254,6 +414,69 @@ export function buildDisplayInfo(
     `Inputs :`,
     ...Object.entries(inputGroup).map(([k, v]) => `  ${k.padEnd(15)} : ${v}`),
   ].join("\n");
+}
+
+/**
+ * Save a replay to the config
+ *
+ * @param cfg
+ * @param selectedRepo
+ * @param selectedBranch
+ * @param selectedWorkflow
+ * @param inputGroup
+ */
+async function saveReplay(
+  cfg: RepoConfig,
+  selectedRepo: string,
+  selectedBranch: string,
+  selectedWorkflow: string,
+  inputGroup: Record<string, unknown>,
+) {
+  // -- FEAT : Adding a replay to the config
+  // 1. Ask if to save (y/n)
+  // 2. Ask for nickname (input)
+  // 3. Add to config
+  let nickname = await text({
+    message: "Enter a name for the replay",
+  });
+
+  const replays = cfg.replays;
+
+  if (replays.length === 0) {
+    cfg.replays = [];
+  }
+
+  let exists = replays.some((r) => r.nickname);
+
+  let newNickname = nickname;
+
+  while (exists) {
+    log.error("Replay with this nickname already exists");
+
+    newNickname = await text({
+      message: "Enter a different name for this replay",
+    });
+
+    if (newNickname !== nickname) {
+      exists = false;
+    }
+  }
+
+  const replay: Replay = {
+    nickname: String(newNickname),
+    repo: String(selectedRepo),
+    branch: String(selectedBranch),
+    workflow: String(selectedWorkflow),
+    inputs: inputGroup,
+  };
+
+  log.info(JSON.stringify(replay, null, 4));
+
+  log.warning(`${replays.length} replays found`);
+
+  cfg.replays.push(replay);
+
+  await writeConfig(cfg);
 }
 // --- LOGIN STATE
 // try {
@@ -278,78 +501,30 @@ export async function main(): Promise<void> {
   try {
     cfg = await loadConfig();
   } catch (error) {
-    log.error(`Failed to load configuration file. Make sure 'config.yml' exists at one of the standard locations (e.g. ~/.config/runr/config.yml) or in the current directory.`);
+    log.error(
+      `Failed to load configuration file. Make sure 'config.yml' exists at one of the standard locations (e.g. ~/.config/runr/config.yml) or in the current directory.`,
+    );
     process.exit(1);
   }
 
   outro("Initialization finished");
 
   intro("Workflow setup started");
-  const repos = getRepos(cfg);
-  log.step(`Repos: ${repos}`);
 
-  const selectedRepo = await select({
-    message: "Pick a repository:",
-    options: repos.map((r) => ({ value: r })).sort(),
-  });
-
-  const selectedBranch = await select({
-    message: "Pick a branch:",
-    options: getBranchesFromRepo(cfg, String(selectedRepo)).map((b) => ({
-      value: b,
-    })),
-  });
-
-  const possibleWorkflows = await getWorkflowsForRepo(String(selectedRepo));
-  const activeWorkflows = filterForActiveWorkflows(possibleWorkflows);
-
-  const selectedWorkflowById = await select({
-    message: "",
-    options: activeWorkflows.map((w) => ({
-      value: w.id,
-      label: w.name,
-      hint: w.path,
-    })),
-  });
-
-  const selectedWorkflowByName = activeWorkflows.find(
-    (w) => w.id === selectedWorkflowById,
-  );
-  const selectedWorkflow = selectedWorkflowByName?.name ?? "";
-  outro("Workflow setup finished");
-
-  intro("Worfklow inputs started");
-  // Construct Workflow Inputs
-  const inputsArray: WorkflowInput[] = await getWorkflowInputs(
-    selectedWorkflow,
-    String(selectedRepo),
-    String(selectedBranch),
-  );
-
-  log.message(`Workflow inputs: ${JSON.stringify(inputsArray, null, 4)}`);
-
-  // Create prompt for inputs
-  const createdGroup = buildInputPrompts(inputsArray);
-
-  const inputGroup = await group(createdGroup, {
-    onCancel: ({ results }) => {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    },
-  });
+  let { selectedWorkflow, selectedRepo, selectedBranch, inputGroup } = await selectWorkflowOrReplay(cfg!);
 
   const workflowRunArgs = buildWorkflowRunArgs(
-    selectedWorkflow,
+    selectedWorkflow!,
     String(selectedRepo),
     String(selectedBranch),
-    inputGroup,
+    inputGroup!,
   );
 
   const displayInfo = buildDisplayInfo(
-    selectedWorkflow,
+    selectedWorkflow!,
     String(selectedRepo),
     String(selectedBranch),
-    inputGroup,
+    inputGroup!,
   );
   outro("Workflow inputs finished");
 
@@ -359,21 +534,47 @@ export async function main(): Promise<void> {
   });
 
   if (shouldContinue) {
-    const { stdout } = await execa("gh", workflowRunArgs);
+    try {
+      // stdio: 'inherit' allows the gh command to print directly to the terminal
+      await execa("gh", workflowRunArgs, { stdio: "inherit" });
+      log.success("Workflow successfully triggered!");
+
+      s.stop();
+
+      s.message("Confirmations");
+
+      const shouldSaveReplay = await confirm({
+        message:
+          "Do you want to save this workflow run command for future use?",
+      });
+
+      if (shouldSaveReplay) {
+        await saveReplay(
+          cfg,
+          String(selectedRepo),
+          String(selectedBranch),
+          String(selectedWorkflow),
+          inputGroup!,
+        );
+      }
+
+      const shouldOpen = await confirm({
+        message: "Do you want to open the workflow in the web ui?",
+      });
+
+      if (shouldOpen) {
+        await execa`gh workflow view ${selectedWorkflow!} -R ${String(selectedRepo)} --web`;
+      }
+
+      outro(
+        `Done ! \n View your workflow in the web ui : https://github.com/${String(selectedRepo)}/actions`,
+      );
+    } catch (error) {
+      log.error(`Failed to trigger workflow: ${error}`);
+      process.exit(1);
+    }
+  } else {
+    cancel("Operation cancelled.");
+    process.exit(0);
   }
-
-  s.stop();
-
-  const shouldOpen = await confirm({
-    message: "Do you want to open the workflow in the web ui?",
-  });
-
-  if (shouldOpen) {
-    await execa`gh workflow view ${selectedWorkflow} -R ${String(selectedRepo)} --web`;
-  }
-
-  s.stop();
-  outro(
-    `Done ! \n View your workflow in the web ui : https://github.com/${String(selectedRepo)}/actions`,
-  );
 }

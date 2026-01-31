@@ -3,15 +3,6 @@
  * Represents the structure of a workflow_dispatch trigger with its inputs
  */
 
-
-// Define the expected structure of your config
-interface RepoConfig {
-  repos: Array<{
-    name: string;
-    branches: string[];
-  }>;
-}
-
 interface Workflow {
   name: string;
   path: string;
@@ -29,13 +20,6 @@ export interface WorkflowInput {
   options: string[] | undefined;
   required: boolean;
 }
-
-// type WorkflowDispatchInputType =
-//   | "string"
-//   | "number"
-//   | "boolean"
-//   | "choice"
-//   | "environment";
 
 interface BaseInput {
   description: string;
@@ -224,21 +208,20 @@ function isEnvironmentInput(
 // ============================================================
 
 export type {
-  RepoConfig,
   Workflow,
   WorkflowDispatchInput,
-  StringInput,
-  NumberInput,
-  BooleanInput,
-  ChoiceInput,
-  EnvironmentInput,
-  WorkflowDispatchTrigger,
-  WorkflowTriggers,
-  WorkflowStep,
-  WorkflowJob,
-  GitHubWorkflow,
   WorkflowDispatch,
-  WorkflowWithDispatchInputs,
+  // GitHubWorkflow,
+  // StringInput,
+  // NumberInput,
+  // BooleanInput,
+  // ChoiceInput,
+  // EnvironmentInput,
+  // WorkflowDispatchTrigger,
+  // WorkflowTriggers,
+  // WorkflowStep,
+  // WorkflowJob,
+  // WorkflowWithDispatchInputs,
 };
 
 export {
