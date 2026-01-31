@@ -27,4 +27,8 @@ export default {
     testPathIgnorePatterns: ["/node_modules/", "/dist/"],
     // testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
     verbose: true,
+    reporters: [
+        'default',
+        ['jest-ctrf-json-reporter', {}],
+    ],
 };
