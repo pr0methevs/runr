@@ -26,6 +26,8 @@ jest.unstable_mockModule("@clack/prompts", () => ({
     step: jest.fn(),
     warn: jest.fn(),
     message: jest.fn(),
+    info: jest.fn(),
+    warning: jest.fn(),
   },
   select: mockSelectFn, // Allows us to mock user input (control return values)
   spinner: jest.fn(() => ({
@@ -51,6 +53,8 @@ const {
   buildInputPrompts,
   buildWorkflowRunArgs,
   buildDisplayInfo,
+  writeConfig,
+  saveReplay,
 } = await import("./index.js");
 
 describe("Phase 1: Login", () => {
@@ -714,5 +718,172 @@ describe("Phase 8: Run Workflow", () => {
     expect(result).toContain("Repo             : owner/test");
     expect(result).toContain("Branch           : dev");
     expect(result).toContain("Inputs :");
+  });
+});
+
+describe("Phase 9: Save Replay", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should save a replay with a unique nickname on first try", async () => {
+    const { text: mockText } = await import("@clack/prompts");
+    (mockText as jest.Mock).mockResolvedValueOnce("my-replay");
+
+    const cfg = {
+      repos: [{ name: "owner/repo", branches: ["main"] }],
+      replays: [],
+    };
+
+    const inputGroup = { environment: "prod" };
+
+    await saveReplay(cfg, "owner/repo", "main", "Deploy", inputGroup);
+
+    // Verify writeConfig was called
+    expect(mockReadFileFn).toHaveBeenCalled();
+
+    // Verify new replay was added to config
+    expect(cfg.replays.length).toBe(1);
+    expect(cfg.replays[0]).toEqual({
+      nickname: "my-replay",
+      repo: "owner/repo",
+      branch: "main",
+      workflow: "Deploy",
+      inputs: { environment: "prod" },
+    });
+  });
+
+  it("should reject duplicate nickname on first try and prompt for new name", async () => {
+    const { text: mockText } = await import("@clack/prompts");
+    (mockText as jest.Mock).mockResolvedValueOnce("duplicate-replay");
+    (mockText as jest.Mock).mockResolvedValueOnce("new-replay");
+
+    const cfg = {
+      repos: [{ name: "owner/repo", branches: ["main"] }],
+      replays: [
+        {
+          nickname: "duplicate-replay",
+          repo: "owner/repo",
+          branch: "main",
+          workflow: "CI",
+          inputs: {},
+        },
+      ],
+    };
+
+    const inputGroup = { environment: "staging" };
+
+    await saveReplay(cfg, "owner/repo", "main", "Deploy", inputGroup);
+
+    // Verify text was called twice (first attempt + retry)
+    expect(mockText).toHaveBeenCalledTimes(2);
+
+    // Verify the accepted nickname was saved
+    expect(cfg.replays.length).toBe(2);
+    expect(cfg.replays[1]).toEqual({
+      nickname: "new-replay",
+      repo: "owner/repo",
+      branch: "main",
+      workflow: "Deploy",
+      inputs: { environment: "staging" },
+    });
+  });
+
+  it("should handle multiple duplicate attempts and accept unique nickname", async () => {
+    const { text: mockText } = await import("@clack/prompts");
+    (mockText as jest.Mock).mockResolvedValueOnce("replay1");
+    (mockText as jest.Mock).mockResolvedValueOnce("replay1");
+    (mockText as jest.Mock).mockResolvedValueOnce("replay2");
+
+    const cfg = {
+      repos: [{ name: "owner/repo", branches: ["main"] }],
+      replays: [
+        {
+          nickname: "replay1",
+          repo: "owner/repo",
+          branch: "main",
+          workflow: "CI",
+          inputs: {},
+        },
+      ],
+    };
+
+    const inputGroup = { debug: "true" };
+
+    await saveReplay(cfg, "owner/repo", "main", "Test", inputGroup);
+
+    // Verify text was called 3 times
+    expect(mockText).toHaveBeenCalledTimes(3);
+
+    // Verify the final unique nickname was saved
+    expect(cfg.replays.length).toBe(2);
+    expect(cfg.replays[1]).toEqual({
+      nickname: "replay2",
+      repo: "owner/repo",
+      branch: "main",
+      workflow: "Test",
+      inputs: { debug: "true" },
+    });
+  });
+
+  it("should save replay to config when nickname is unique", async () => {
+    const { text: mockText } = await import("@clack/prompts");
+    (mockText as jest.Mock).mockResolvedValueOnce("new-unique-replay");
+
+    const cfg = {
+      repos: [{ name: "owner/repo", branches: ["main"] }],
+      replays: [
+        {
+          nickname: "existing-replay",
+          repo: "owner/repo",
+          branch: "main",
+          workflow: "CI",
+          inputs: {},
+        },
+      ],
+    };
+
+    const inputGroup = { version: "1.0.0" };
+
+    await saveReplay(cfg, "owner/repo", "develop", "Release", inputGroup);
+
+    // Verify only one text prompt was made
+    expect(mockText).toHaveBeenCalledTimes(1);
+
+    // Verify the config now has both replays
+    expect(cfg.replays.length).toBe(2);
+    expect(cfg.replays[1]).toEqual({
+      nickname: "new-unique-replay",
+      repo: "owner/repo",
+      branch: "develop",
+      workflow: "Release",
+      inputs: { version: "1.0.0" },
+    });
+  });
+
+  it("should not create duplicate when user provides same name repeatedly but different name on final attempt", async () => {
+    const { text: mockText } = await import("@clack/prompts");
+    (mockText as jest.Mock).mockResolvedValueOnce("existing");
+    (mockText as jest.Mock).mockResolvedValueOnce("existing");
+    (mockText as jest.Mock).mockResolvedValueOnce("unique");
+
+    const cfg = {
+      repos: [{ name: "owner/repo", branches: ["main"] }],
+      replays: [
+        {
+          nickname: "existing",
+          repo: "owner/repo",
+          branch: "main",
+          workflow: "CI",
+          inputs: {},
+        },
+      ],
+    };
+
+    await saveReplay(cfg, "owner/repo", "main", "Deploy", {});
+
+    // Verify final config only has 2 replays (original + new)
+    expect(cfg.replays.length).toBe(2);
+    expect(cfg.replays.map((r) => r.nickname)).toEqual(["existing", "unique"]);
   });
 });

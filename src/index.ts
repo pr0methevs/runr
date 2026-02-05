@@ -425,7 +425,7 @@ export function buildDisplayInfo(
  * @param selectedWorkflow
  * @param inputGroup
  */
-async function saveReplay(
+export async function saveReplay(
   cfg: RepoConfig,
   selectedRepo: string,
   selectedBranch: string,
@@ -446,7 +446,7 @@ async function saveReplay(
     cfg.replays = [];
   }
 
-  let exists = replays.some((r) => r.nickname);
+  let exists = replays.some((r) => r.nickname === nickname);
 
   let newNickname = nickname;
 
@@ -457,9 +457,7 @@ async function saveReplay(
       message: "Enter a different name for this replay",
     });
 
-    if (newNickname !== nickname) {
-      exists = false;
-    }
+    exists = replays.some((r) => r.nickname === newNickname);
   }
 
   const replay: Replay = {
